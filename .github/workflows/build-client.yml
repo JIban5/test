@@ -1,0 +1,119 @@
+name: Build RustDesk Client
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+    
+    - name: Install dependencies
+      run: |
+        choco install -y llvm
+        vcpkg install libvpx libyuv opus aom
+    
+    - name: Build
+      run: |
+        cargo build --release --features inline
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rustdesk-windows-x64
+        path: target/release/rustdesk.exe
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+    
+    - name: Install dependencies
+      run: |
+        brew install llvm create-dmg nasm yasm
+    
+    - name: Setup vcpkg
+      run: |
+        git clone https://github.com/microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.sh
+        ./vcpkg/vcpkg install libvpx libyuv opus aom
+        echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
+    
+    - name: Build
+      run: |
+        cargo build --release --features hwcodec
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rustdesk-macos
+        path: target/release/rustdesk
+
+  build-linux:
+    runs-on: ubuntu-20.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          g++ gcc git curl wget nasm yasm \
+          libgtk-3-dev clang libxcb-randr0-dev libxdo-dev \
+          libxfixes-dev libxcb-shape0-dev libxcb-xfixes0-dev libasound2-dev \
+          libpulse-dev cmake libclang-dev ninja-build \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libappindicator3-dev libva-dev libvdpau-dev
+    
+    - name: Setup vcpkg
+      run: |
+        git clone https://github.com/microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.sh
+        ./vcpkg/vcpkg install libvpx libyuv opus aom
+        echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
+    
+    - name: Build
+      run: |
+        cargo build --release
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rustdesk-linux-x64
+        path: target/release/rustdesk

@@ -1,0 +1,52 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Flutter
+/flutter/.dart_tool/
+/flutter/.flutter-plugins
+/flutter/.flutter-plugins-dependencies
+/flutter/.packages
+/flutter/build/
+/flutter/.pub-cache/
+/flutter/.pub/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# vcpkg
+vcpkg_installed/
+/vcpkg/
+
+# Logs
+*.log
+/tmp/
+*.tmp
+
+# Build outputs
+*.dmg
+*.exe
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# macOS
+.DS_Store
+*.xcworkspace
+xcuserdata/
+
+# Windows
+Thumbs.db
+
+# Keys (security)
+*.pem
+*.key
+id_ed25519
+id_ed25519.pub
