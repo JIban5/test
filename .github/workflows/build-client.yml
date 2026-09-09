@@ -24,17 +24,25 @@ jobs:
       run: choco install -y llvm
     
     - name: Setup vcpkg
+      shell: bash
       run: |
-        git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-        C:\vcpkg\bootstrap-vcpkg.bat
-        echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        git clone https://github.com/microsoft/vcpkg.git C:/vcpkg
+        cd C:/vcpkg
+        git checkout 120deac3062162151622ca4860575a33844ba10b
+        ./bootstrap-vcpkg.bat
+        echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
     
     - name: Install dependencies via vcpkg
+      shell: bash
       run: |
-        C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
+        export VCPKG_ROOT=C:/vcpkg
+        # vcpkg 会读取当前目录的 vcpkg.json
+        C:/vcpkg/vcpkg install --triplet x64-windows-static
     
     - name: Build
-      run: cargo build --release --features inline
+      run: |
+        $env:VCPKG_ROOT = "C:\vcpkg"
+        cargo build --release --features inline
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
