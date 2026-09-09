@@ -26,18 +26,18 @@ jobs:
     - name: Setup vcpkg
       shell: bash
       run: |
-        git clone https://github.com/microsoft/vcpkg.git C:/vcpkg
-        cd C:/vcpkg
+        # Windows runners 已经预装了 vcpkg
+        cd $VCPKG_INSTALLATION_ROOT
+        git fetch
         git checkout 120deac3062162151622ca4860575a33844ba10b
         ./bootstrap-vcpkg.bat
-        echo "VCPKG_ROOT=C:/vcpkg" >> $GITHUB_ENV
+        echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
     
     - name: Install dependencies via vcpkg
       shell: bash
       run: |
-        export VCPKG_ROOT=C:/vcpkg
         # vcpkg 会读取当前目录的 vcpkg.json
-        C:/vcpkg/vcpkg install --triplet x64-windows-static
+        $VCPKG_INSTALLATION_ROOT/vcpkg install --triplet x64-windows-static
     
     - name: Build
       run: |
