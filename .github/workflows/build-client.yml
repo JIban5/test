@@ -32,12 +32,13 @@ jobs:
         cargo build --release --features inline
     
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rustdesk-windows-x64
         path: target/release/rustdesk.exe
 
   build-macos:
+    if: false  # 已禁用 macOS 构建以加速
     runs-on: macos-latest
     
     steps:
@@ -69,12 +70,13 @@ jobs:
         cargo build --release --features hwcodec
     
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rustdesk-macos
         path: target/release/rustdesk
 
   build-linux:
+    if: false  # 已禁用 Linux 构建以加速
     runs-on: ubuntu-20.04
     
     steps:
@@ -113,7 +115,7 @@ jobs:
         cargo build --release
     
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rustdesk-linux-x64
         path: target/release/rustdesk
