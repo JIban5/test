@@ -55,23 +55,46 @@ fn link_vcpkg(mut path: PathBuf, name: &str) -> PathBuf {
         target = target.replace("x64", "x86");
     }
     println!("cargo:info={}", target);
+    println!("cargo:warning=Looking for vcpkg package '{}' with target '{}'", name, target);
+    
     if let Ok(vcpkg_root) = std::env::var("VCPKG_INSTALLED_ROOT") {
+        println!("cargo:warning=Using VCPKG_INSTALLED_ROOT: {}", vcpkg_root);
         path = vcpkg_root.into();
     } else {
+        println!("cargo:warning=Using VCPKG_ROOT/installed");
         path.push("installed");
     }
-    path.push(target);
+    path.push(&target);
+    
+    // 验证路径存在
+    if !path.exists() {
+        panic!("vcpkg target path does not exist: {}. Make sure vcpkg packages are installed for target '{}'", path.display(), target);
+    }
+    
+    let lib_path = path.join("lib");
+    let include_path = path.join("include");
+    
+    // 验证关键路径
+    if !lib_path.exists() {
+        panic!("vcpkg lib path does not exist: {}", lib_path.display());
+    }
+    if !include_path.exists() {
+        panic!("vcpkg include path does not exist: {}", include_path.display());
+    }
+    
+    println!("cargo:warning=Library path: {}", lib_path.display());
+    println!("cargo:warning=Include path: {}", include_path.display());
+    
     println!(
         "cargo:rustc-link-lib=static={}",
         name.trim_start_matches("lib")
     );
     println!(
         "cargo:rustc-link-search={}",
-        path.join("lib").to_str().unwrap()
+        lib_path.to_str().unwrap()
     );
-    let include = path.join("include");
-    println!("cargo:include={}", include.to_str().unwrap());
-    include
+    println!("cargo:include={}", include_path.to_str().unwrap());
+    include_path
 }
 
 /// Link homebrew package(for Mac M1).
@@ -144,6 +167,16 @@ fn generate_bindings(
     exact_file: &Path,
     regex: &str,
 ) {
+    println!("cargo:warning=Generating bindings for: {}", ffi_header.display());
+    println!("cargo:warning=Include paths:");
+    for (i, dir) in include_paths.iter().enumerate() {
+        println!("cargo:warning=  [{}] {}", i, dir.display());
+        // 验证路径是否存在
+        if !dir.exists() {
+            println!("cargo:warning=    WARNING: Path does not exist!");
+        }
+    }
+    
     let mut b = bindgen::builder()
         .header(ffi_header.to_str().unwrap())
         .allowlist_type(regex)

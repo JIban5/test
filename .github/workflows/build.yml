@@ -100,12 +100,14 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
           $env:VCPKG_ROOT = "C:\vcpkg"
-          C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static
+          C:\vcpkg\vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
         shell: powershell
       
       - name: Build RustDesk
         run: |
           $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:VCPKG_INSTALLED_ROOT = "C:\vcpkg\installed"
+          $env:LIBCLANG_PATH = "$env:ChocolateyInstall\lib\llvm\tools\LLVM\bin"
           python build.py --flutter --hwcodec
         shell: powershell
       
