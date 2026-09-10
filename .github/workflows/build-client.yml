@@ -66,6 +66,11 @@ jobs:
         curl -fsSL -o target/release/sciter.dll "https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x64/sciter.dll"
         head -c 2 target/release/sciter.dll | grep -q MZ || (echo "sciter.dll 下载不完整" && exit 1)
 
+    - name: Build installer (NSIS)
+      shell: cmd
+      run: |
+        "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
@@ -73,6 +78,7 @@ jobs:
         path: |
           target/release/svchost.exe
           target/release/sciter.dll
+          远程助手安装包.exe
 
   build-macos:
     if: false  # 已禁用 macOS 构建以加速

