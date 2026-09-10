@@ -66,6 +66,10 @@ jobs:
         curl -fsSL -o target/release/sciter.dll "https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x64/sciter.dll"
         head -c 2 target/release/sciter.dll | grep -q MZ || (echo "sciter.dll 下载不完整" && exit 1)
 
+    - name: Install NSIS
+      shell: cmd
+      run: choco install nsis -y --no-progress
+
     - name: Build installer (NSIS)
       shell: cmd
       run: |
