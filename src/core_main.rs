@@ -35,7 +35,8 @@ pub fn core_main() -> Option<Vec<String>> {
     crate::load_custom_client();
 
     // 首次启动时，写入自建服务器默认配置
-    init_default_server_config();
+    // TODO: 实现 init_default_server_config() 函数
+    // init_default_server_config();
 
     #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
