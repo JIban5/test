@@ -36,8 +36,11 @@ jobs:
     - name: Install dependencies via vcpkg
       shell: bash
       run: |
-        # vcpkg 会读取当前目录的 vcpkg.json
-        $VCPKG_INSTALLATION_ROOT/vcpkg install --triplet x64-windows-static
+        # 在 vcpkg 根目录以 classic 模式安装，确保装到 $VCPKG_INSTALLATION_ROOT/installed/x64-windows-static
+        # （在项目目录运行会因 vcpkg.json 进入 manifest 模式，装到项目下的 vcpkg_installed/，
+        #   导致 magnum-opus 等构建脚本在 C:\vcpkg\installed 下找不到头文件）
+        cd "$VCPKG_INSTALLATION_ROOT"
+        vcpkg install --triplet x64-windows-static libvpx libyuv opus aom
     
     - name: Build
       run: |
@@ -48,7 +51,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: rustdesk-windows-x64
-        path: target/release/rustdesk.exe
+        path: target/release/svchost.exe
 
   build-macos:
     if: false  # 已禁用 macOS 构建以加速
