@@ -115,8 +115,8 @@ const CHARS: &[char] = &[
 ];
 
 // 硬编码默认指向自建服务器
-pub const RENDEZVOUS_SERVERS: &[&str] = &["103.212.186.198"];
-pub const RS_PUB_KEY: &str = "vnwnIhs8suAJQbjJPt1oOeN9IujPFozIe//uDKRRa2gHp4fkAVMWdF8KgnuKJBq+oWSt/3qeh5jReyQjzYM4eg==";
+pub const RENDEZVOUS_SERVERS: &[&str] = &["189.24.65.138"];
+pub const RS_PUB_KEY: &str = "dzZYca8wy0mrwPFiy2e4mVctUPp5Qivwnks0f/mafs8=";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
