@@ -1082,7 +1082,8 @@ fn get_api_server_(api: String, custom: String) -> String {
             return format!("http://{}", s);
         }
     }
-    "https://admin.rustdesk.com".to_owned()
+    // 未手动设置 api-server 时，默认指向自建管理后台
+    config::API_SERVER.to_owned()
 }
 
 #[inline]

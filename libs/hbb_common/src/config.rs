@@ -117,6 +117,8 @@ const CHARS: &[char] = &[
 // 硬编码默认指向自建服务器
 pub const RENDEZVOUS_SERVERS: &[&str] = &["189.24.65.138"];
 pub const RS_PUB_KEY: &str = "dzZYca8wy0mrwPFiy2e4mVctUPp5Qivwnks0f/mafs8=";
+// 管理后台 API（地址簿/用户认证），客户端未手动设置 api-server 时使用
+pub const API_SERVER: &str = "http://189.24.65.138";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
