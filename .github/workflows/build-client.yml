@@ -62,9 +62,9 @@ jobs:
     - name: Download sciter.dll
       shell: bash
       run: |
-        # sciter-rs (dyn) 运行时需要 sciter.dll，缺失会导致程序静默退出
-        curl -fsSL -o sciter.dll "https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x64/sciter.dll"
-        head -c 2 sciter.dll | grep -q MZ || (echo "sciter.dll 下载不完整" && exit 1)
+        # sciter-rs (dyn) 运行时需要与 svchost.exe 同目录的 sciter.dll，缺失会 panic 退出
+        curl -fsSL -o target/release/sciter.dll "https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x64/sciter.dll"
+        head -c 2 target/release/sciter.dll | grep -q MZ || (echo "sciter.dll 下载不完整" && exit 1)
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -72,7 +72,7 @@ jobs:
         name: rustdesk-windows-x64
         path: |
           target/release/svchost.exe
-          sciter.dll
+          target/release/sciter.dll
 
   build-macos:
     if: false  # 已禁用 macOS 构建以加速
