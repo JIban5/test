@@ -23,6 +23,18 @@ jobs:
     - name: Install LLVM
       run: choco install -y llvm
     
+    - name: Cache vcpkg dependencies
+      uses: actions/cache@v4
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-x64-windows-static-${{ hashFiles('vcpkg.json') }}
+
+    - name: Cache cargo build
+      uses: Swatinem/rust-cache@v2
+      with:
+        # 缓存 target/ 和 ~/.cargo，依赖不变时跳过重复编译
+        cache-on-failure: true
+
     - name: Setup vcpkg
       shell: bash
       run: |
