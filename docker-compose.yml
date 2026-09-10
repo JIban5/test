@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  rustdesk-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rustdesk-builder
+    volumes:
+      # 挂载源代码目录
+      - .:/workspace
+      # 缓存 Cargo 依赖，加速后续构建
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git-cache:/usr/local/cargo/git
+      # 缓存构建产物
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - VCPKG_ROOT=/opt/vcpkg
+      - CARGO_TERM_COLOR=always
+    # 默认启动 bash
+    command: /bin/bash
+    # 保持容器运行
+    stdin_open: true
+    tty: true
+
+volumes:
+  cargo-cache:
+    name: rustdesk-cargo-cache
+  cargo-git-cache:
+    name: rustdesk-cargo-git-cache
+  target-cache:
+    name: rustdesk-target-cache

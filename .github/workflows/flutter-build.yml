@@ -283,6 +283,27 @@ jobs:
         shell: bash
         run: echo "SODIUM_LIB_DIR=$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/lib" >> "$GITHUB_ENV"
 
+      - name: Set vcpkg environment variables for opus
+        shell: bash
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+          # 为 magnum-opus 设置环境变量
+          echo "LIBOPUS_STATIC=1" >> "$GITHUB_ENV"
+          echo "OPUS_STATIC=1" >> "$GITHUB_ENV"
+          # 设置 bindgen 需要的 clang 环境变量
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include" >> "$GITHUB_ENV"
+          # 设置 pkg-config 路径（如果 magnum-opus 使用 pkg-config）
+          echo "PKG_CONFIG_PATH=$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/lib/pkgconfig" >> "$GITHUB_ENV"
+          # 确保 opus 头文件已安装
+          if [ ! -f "$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/opus/opus.h" ]; then
+            echo "Error: opus headers not found in vcpkg installation"
+            echo "Listing vcpkg installed directory:"
+            ls -laR "$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/" || true
+            exit 1
+          fi
+          echo "✅ Opus headers found at: $VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/opus/"
+          ls -la "$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/opus/"
+
       - name: Build rustdesk
         run: |
           # Windows: build RustDesk
