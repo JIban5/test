@@ -1,0 +1,76 @@
+# RustDesk 精简构建镜像（仅后端，不含 Flutter）
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+# 配置 Ubuntu 镜像源（阿里云）
+RUN sed -i 's/ports.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+
+# 安装核心依赖（最小化）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl wget ca-certificates \
+    build-essential pkg-config libssl-dev \
+    cmake ninja-build nasm \
+    libgtk-3-dev \
+    libxcb-randr0-dev libxdo-dev \
+    libxfixes-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+    libasound2-dev libpulse-dev \
+    libclang-dev llvm-dev \
+    # RustDesk 编译所需的 GStreamer 和硬件加速库
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libva-dev \
+    libvdpau-dev \
+    # Opus 音频编解码器
+    libopus-dev \
+    python3 zip unzip tar \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Rust（使用国内镜像）
+RUN curl --proto '=https' --tlsv1.2 -sSf https://rsproxy.cn/rustup-init.sh | sh -s -- -y --default-toolchain stable --profile minimal
+
+# 配置 Rust 国内镜像源
+RUN mkdir -p /usr/local/cargo && \
+    echo '[source.crates-io]' > /usr/local/cargo/config.toml && \
+    echo 'replace-with = "rsproxy-sparse"' >> /usr/local/cargo/config.toml && \
+    echo '[source.rsproxy-sparse]' >> /usr/local/cargo/config.toml && \
+    echo 'registry = "sparse+https://rsproxy.cn/index/"' >> /usr/local/cargo/config.toml && \
+    echo '[net]' >> /usr/local/cargo/config.toml && \
+    echo 'git-fetch-with-cli = true' >> /usr/local/cargo/config.toml
+
+# 创建工作目录
+WORKDIR /workspace
+
+# 验证安装
+RUN rustc --version && cargo --version
+
+# 构建脚本（仅后端）
+COPY <<'EOF' /usr/local/bin/build-rustdesk.sh
+#!/bin/bash
+set -e
+
+echo "🚀 开始构建 RustDesk 后端..."
+
+if [ ! -f "/workspace/Cargo.toml" ]; then
+    echo "❌ 错误: 未找到 Cargo.toml，请确保挂载了正确的源代码目录"
+    exit 1
+fi
+
+echo "📦 更新 Rust 依赖..."
+cargo update
+
+echo "🔨 开始编译..."
+cargo build --release
+
+echo "✅ 构建完成！"
+echo "📂 输出文件位于: target/release/"
+ls -lh target/release/rustdesk 2>/dev/null || echo "⚠️  未找到构建产物"
+EOF
+
+RUN chmod +x /usr/local/bin/build-rustdesk.sh
+
+CMD ["/bin/bash"]

@@ -184,7 +184,12 @@ pub fn start(args: &mut [String]) {
         page
     ));
     let hide_cm = *cm::HIDE_CM.lock().unwrap();
-    if !args.is_empty() && args[0] == "--cm" && hide_cm {
+    
+    // 检查是否需要隐藏主窗口（安装后或配置隐藏托盘时）
+    let should_hide = (args.is_empty() && crate::ui_interface::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y")
+        || (!args.is_empty() && args[0] == "--cm" && hide_cm);
+    
+    if should_hide {
         // run_app calls expand(show) + run_loop, we use collapse(hide) + run_loop instead to create a hidden window
         frame.collapse(true);
         frame.run_loop();

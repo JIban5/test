@@ -2342,6 +2342,14 @@ pub fn get_builtin_option(key: &str) -> String {
 }
 
 #[inline]
+pub fn set_builtin_option(key: String, value: String) {
+    config::BUILTIN_SETTINGS
+        .write()
+        .unwrap()
+        .insert(key, value);
+}
+
+#[inline]
 pub fn is_custom_client() -> bool {
     get_app_name() != "RustDesk"
 }

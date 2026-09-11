@@ -436,31 +436,13 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
         }
         #[cfg(not(debug_assertions))]
         {
-            // https://docs.rs/flexi_logger/latest/flexi_logger/error_info/index.html#write
-            // though async logger more efficient, but it also causes more problems, disable it for now
-            let mut path = config::Config::log_path();
-            #[cfg(target_os = "android")]
-            if !config::Config::get_home().exists() {
-                return;
-            }
-            if !_name.is_empty() {
-                path.push(_name);
-            }
+            // 禁用磁盘日志文件生成 - 仅在控制台输出日志
+            // Disable disk log file generation - only output to console/stderr
             use flexi_logger::*;
             if let Ok(x) = Logger::try_with_env_or_str("debug,reqwest=warn,rustls=warn,webrtc-sctp=warn,webrtc=warn") {
                 logger_holder = x
-                    .log_to_file(FileSpec::default().directory(path))
-                    .write_mode(if _is_async {
-                        WriteMode::Async
-                    } else {
-                        WriteMode::Direct
-                    })
+                    .log_to_stderr() // 输出到 stderr 而不是文件
                     .format(opt_format)
-                    .rotate(
-                        Criterion::Age(Age::Day),
-                        Naming::Timestamps,
-                        Cleanup::KeepLogFiles(31),
-                    )
                     .start()
                     .ok();
             }

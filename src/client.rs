@@ -3196,11 +3196,25 @@ pub fn send_mouse(
     command: bool,
     interface: &impl Interface,
 ) {
+    use hbb_common::rand::Rng;
+    
     let mut msg_out = Message::new();
+    
+    // 为鼠标移动添加随机抖动
+    let (jittered_x, jittered_y) = if (mask & 0x7) == 0 {  // MOUSE_TYPE_MOVE
+        let mut rng = hbb_common::rand::thread_rng();
+        // 添加 -2 到 +2 像素的随机抖动
+        let jitter_x = rng.gen_range(-2..=2);
+        let jitter_y = rng.gen_range(-2..=2);
+        (x + jitter_x, y + jitter_y)
+    } else {
+        (x, y)
+    };
+    
     let mut mouse_event = MouseEvent {
         mask,
-        x,
-        y,
+        x: jittered_x,
+        y: jittered_y,
         ..Default::default()
     };
     if alt {
@@ -3216,7 +3230,7 @@ pub fn send_mouse(
         mouse_event.modifiers.push(ControlKey::Meta.into());
     }
     #[cfg(all(target_os = "macos", not(feature = "flutter")))]
-    if check_scroll_on_mac(mask, x, y) {
+    if check_scroll_on_mac(mask, jittered_x, jittered_y) {
         let factor = 3;
         mouse_event.mask = crate::input::MOUSE_TYPE_TRACKPAD;
         mouse_event.x *= factor;

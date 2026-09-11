@@ -1580,6 +1580,7 @@ fn get_after_install(
     netsh advfirewall firewall add rule name=\"{app_name} Service\" dir=in action=allow program=\"{exe}\" enable=yes
     {create_service}
     reg add HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /f /v SoftwareSASGeneration /t REG_DWORD /d 1
+    if exist \"%PUBLIC%\\Desktop\\{app_name}.lnk\" del /f /q \"%PUBLIC%\\Desktop\\{app_name}.lnk\"
     ", create_service=get_create_service(&exe))
 }
 
@@ -1699,6 +1700,9 @@ if exist \"{tmp_path}\\{app_name} Tray.lnk\" del /f /q \"{tmp_path}\\{app_name} 
         Config::set_option("custom-rendezvous-server".into(), lic.host);
         Config::set_option("api-server".into(), lic.api);
     }
+    
+    // 安装时设置隐藏托盘图标选项，使安装后不自动弹窗、不显示托盘
+    Config::set_option("hide-tray".into(), "Y".into());
 
     let tray_shortcuts = if config::is_outgoing_only() {
         "".to_owned()
@@ -3958,16 +3962,17 @@ sc start {app_name}
 
 fn run_after_run_cmds(silent: bool) {
     let (_, _, _, exe) = get_install_info();
+    
+    // 安装后不自动弹窗、不显示托盘图标
+    // Set OPTION_HIDE_TRAY to prevent window and tray icon from appearing
     if !silent {
-        log::debug!("Spawn new window");
-        allow_err!(std::process::Command::new("cmd")
-            .args(&["/c", "timeout", "/t", "2", "&", &format!("{exe}")])
-            .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
-            .spawn());
+        log::debug!("Installation complete - window and tray will remain hidden");
     }
-    if Config::get_option("stop-service") != "Y" {
-        allow_err!(std::process::Command::new(&exe).arg("--tray").spawn());
-    }
+    
+    // 不再自动启动主窗口和托盘图标
+    // Do NOT spawn the main window or tray icon after installation
+    // The user can use Ctrl+Alt+J to show the settings window
+    
     std::thread::sleep(std::time::Duration::from_millis(300));
 }
 

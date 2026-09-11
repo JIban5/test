@@ -46,22 +46,33 @@ pub fn toggle_window_visibility() {
     
     #[cfg(target_os = "windows")]
     {
-        use winapi::um::winuser::{FindWindowW, ShowWindow, SW_HIDE, SW_SHOW, SetForegroundWindow};
+        use winapi::um::winuser::{FindWindowW, ShowWindow, SW_HIDE, SW_SHOW, SW_RESTORE, SetForegroundWindow, IsWindowVisible};
         use std::ptr;
         
         unsafe {
-            // 查找主窗口 (需要根据实际窗口标题调整)
-            let window_title: Vec<u16> = "RustDesk\0".encode_utf16().collect();
+            // 动态获取应用名称作为窗口标题
+            let app_name = crate::common::get_app_name();
+            let window_title: Vec<u16> = format!("{}\0", app_name).encode_utf16().collect();
             let hwnd = FindWindowW(ptr::null(), window_title.as_ptr());
             
             if !hwnd.is_null() {
                 if *visible {
+                    // 显示窗口：先恢复（如果最小化），再显示，再设置前台
+                    ShowWindow(hwnd, SW_RESTORE);
                     ShowWindow(hwnd, SW_SHOW);
                     SetForegroundWindow(hwnd);
-                    log::info!("窗口已显示");
+                    log::info!("主窗口已显示并置于前台");
                 } else {
                     ShowWindow(hwnd, SW_HIDE);
-                    log::info!("窗口已隐藏到后台");
+                    log::info!("主窗口已隐藏到后台");
+                }
+            } else {
+                log::warn!("未找到主窗口 (标题: {})", app_name);
+                // 如果找不到窗口但用户按了热键，尝试启动主窗口
+                if *visible {
+                    log::info!("尝试启动主窗口...");
+                    // 发送IPC消息或启动新实例
+                    let _ = crate::ipc::connect(1000, "");
                 }
             }
         }
@@ -100,11 +111,15 @@ pub fn minimize_to_tray() {
         use std::ptr;
         
         unsafe {
-            let window_title: Vec<u16> = "RustDesk\0".encode_utf16().collect();
+            let app_name = crate::common::get_app_name();
+            let window_title: Vec<u16> = format!("{}\0", app_name).encode_utf16().collect();
             let hwnd = FindWindowW(ptr::null(), window_title.as_ptr());
             
             if !hwnd.is_null() {
                 ShowWindow(hwnd, SW_HIDE);
+                log::info!("窗口已隐藏 (标题: {})", app_name);
+            } else {
+                log::warn!("未找到要隐藏的窗口 (标题: {})", app_name);
             }
         }
     }

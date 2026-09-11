@@ -37,6 +37,13 @@ pub fn core_main() -> Option<Vec<String>> {
     // 首次启动时，写入自建服务器默认配置
     // TODO: 实现 init_default_server_config() 函数
     // init_default_server_config();
+    
+    // 设置隐藏托盘图标选项到 BUILTIN_SETTINGS（内存配置）
+    // 这样可以确保启动时不显示主窗口和托盘图标
+    crate::common::set_builtin_option(
+        hbb_common::config::keys::OPTION_HIDE_TRAY.to_string(),
+        "Y".to_string()
+    );
 
     #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {

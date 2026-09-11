@@ -1218,6 +1218,8 @@ impl<T: InvokeUiSession> Session<T> {
         shift: bool,
         command: bool,
     ) {
+        use hbb_common::rand::Rng;
+        
         #[allow(unused_mut)]
         let mut command = command;
         #[cfg(windows)]
@@ -1229,6 +1231,16 @@ impl<T: InvokeUiSession> Session<T> {
 
         // Compute event type once using MOUSE_TYPE_MASK for reuse
         let event_type = mask & MOUSE_TYPE_MASK;
+        
+        // 为鼠标移动添加随机停顿（10% 概率停顿 5-15ms）
+        if event_type == 0 {  // MOUSE_TYPE_MOVE
+            let mut rng = hbb_common::rand::thread_rng();
+            if rng.gen_range(0..10) == 0 {  // 10% 概率
+                let pause_ms = rng.gen_range(5..=15);
+                std::thread::sleep(std::time::Duration::from_millis(pause_ms));
+            }
+        }
+        
         let (x, y) = if event_type == MOUSE_TYPE_WHEEL || event_type == MOUSE_TYPE_TRACKPAD {
             self.get_scroll_xy((x, y))
         } else {

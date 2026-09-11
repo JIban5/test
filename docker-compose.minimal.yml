@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  rustdesk-builder-minimal:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    container_name: rustdesk-builder-minimal
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git-cache:/usr/local/cargo/git
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - CARGO_TERM_COLOR=always
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+
+volumes:
+  cargo-cache:
+    name: rustdesk-cargo-cache
+  cargo-git-cache:
+    name: rustdesk-cargo-git-cache
+  target-cache:
+    name: rustdesk-target-cache

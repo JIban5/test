@@ -1,29 +1,6 @@
 name: Build the flutter version of the RustDesk
 
 on:
-  # 推送到 main 分支时自动构建
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '**.txt'
-      - 'LICENSE'
-  
-  # 手动触发构建
-  workflow_dispatch:
-    inputs:
-      upload-artifact:
-        type: boolean
-        default: true
-        description: '是否上传构建产物'
-      upload-tag:
-        type: string
-        default: "nightly"
-        description: 'Release 标签'
-  
-  # 保留原有的 workflow_call（被其他工作流调用）
   workflow_call:
     inputs:
       upload-artifact:
@@ -77,7 +54,6 @@ env:
 
 jobs:
   generate-sbom:
-    if: false  # 已禁用 SBOM 生成以加速
     runs-on: ubuntu-latest
 
     permissions:
@@ -306,27 +282,6 @@ jobs:
         shell: bash
         run: echo "SODIUM_LIB_DIR=$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/lib" >> "$GITHUB_ENV"
 
-      - name: Set vcpkg environment variables for opus
-        shell: bash
-        run: |
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
-          # 为 magnum-opus 设置环境变量
-          echo "LIBOPUS_STATIC=1" >> "$GITHUB_ENV"
-          echo "OPUS_STATIC=1" >> "$GITHUB_ENV"
-          # 设置 bindgen 需要的 clang 环境变量
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include" >> "$GITHUB_ENV"
-          # 设置 pkg-config 路径（如果 magnum-opus 使用 pkg-config）
-          echo "PKG_CONFIG_PATH=$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/lib/pkgconfig" >> "$GITHUB_ENV"
-          # 确保 opus 头文件已安装
-          if [ ! -f "$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/opus/opus.h" ]; then
-            echo "Error: opus headers not found in vcpkg installation"
-            echo "Listing vcpkg installed directory:"
-            ls -laR "$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/" || true
-            exit 1
-          fi
-          echo "✅ Opus headers found at: $VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/opus/"
-          ls -la "$VCPKG_ROOT/installed/${{ matrix.job.vcpkg-triplet }}/include/opus/"
-
       - name: Build rustdesk
         run: |
           # Windows: build RustDesk
@@ -456,7 +411,7 @@ jobs:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
     # Temporarily disable this action due to additional test is needed.
-    if: false
+    # if: false
     strategy:
       fail-fast: false
       matrix:
@@ -604,8 +559,7 @@ jobs:
             ./SignOutput/rustdesk-*.exe
 
   build-rustdesk-ios:
-    if: false  # 已禁用 iOS 构建以加速
-    # if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -727,7 +681,6 @@ jobs:
 
 
   build-for-macOS:
-    if: false  # 已禁用 macOS 构建以加速
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -991,7 +944,6 @@ jobs:
           files: rustdesk-${{ env.VERSION }}-unsigned.tar.gz
 
   build-rustdesk-android:
-    if: false  # 已禁用 Android 构建以加速
     needs: [generate-bridge]
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
@@ -1285,7 +1237,6 @@ jobs:
             signed-apk/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
 
   build-rustdesk-android-universal:
-    if: false  # 已禁用 Android Universal 构建以加速
     needs: [build-rustdesk-android]
     name: build rustdesk android universal apk
     if: ${{ inputs.upload-artifact }}
@@ -1471,7 +1422,6 @@ jobs:
             signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
 
   build-rustdesk-linux:
-    if: false  # 已禁用 Linux 构建以加速
     needs: [generate-bridge]
     name: build rustdesk linux ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.on }}
@@ -1813,7 +1763,6 @@ jobs:
   # old for it. A separate job rather than a matrix entry of build-rustdesk-linux: appimage and
   # flatpak need that job, and a failure here must not skip them.
   build-rustdesk-linux-drm:
-    if: false  # 已禁用 Linux DRM 构建以加速
     needs: [generate-bridge]
     name: build rustdesk linux drm x86_64
     runs-on: ubuntu-22.04
@@ -2078,8 +2027,7 @@ jobs:
           path: ${{ env.DRM_DEB }}
 
   build-rustdesk-linux-sciter:
-    if: false  # 已禁用 Linux Sciter 构建以加速
-    # if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact }}
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:
@@ -2305,7 +2253,6 @@ jobs:
           path: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.deb
 
   build-appimage:
-    if: false  # 已禁用 AppImage 构建以加速
     name: Build appimage ${{ matrix.job.target }}
     needs: [build-rustdesk-linux]
     runs-on: ubuntu-22.04
@@ -2357,7 +2304,6 @@ jobs:
             ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage
 
   build-flatpak:
-    if: false  # 已禁用 Flatpak 构建以加速
     name: Build flatpak ${{ matrix.job.target }}${{ matrix.job.suffix }}
     needs:
       - build-rustdesk-linux
