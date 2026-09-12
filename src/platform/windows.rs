@@ -1864,7 +1864,9 @@ fn get_uninstall(kill_self: bool, uninstall_printer: bool) -> ResultType<String>
 }
 
 pub fn uninstall_me(kill_self: bool) -> ResultType<()> {
-    run_cmds(get_uninstall(kill_self, true)?, true, "uninstall")
+    // 修复蓝屏问题：卸载时不执行打印机/显示驱动卸载脚本（驱动从未安装时执行卸载命令
+    // 有触发系统崩溃的风险），仅做进程、服务、文件与注册表清理。
+    run_cmds(get_uninstall(kill_self, false)?, true, "uninstall")
 }
 
 fn write_vbs(cmds: String, tip: &str) -> ResultType<PathBuf> {

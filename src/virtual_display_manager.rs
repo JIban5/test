@@ -23,13 +23,17 @@ pub fn get_cur_device_string() -> &'static str {
 }
 
 pub fn is_virtual_display_supported() -> bool {
+    // 修复蓝屏问题：虚拟显示驱动（IDD/AMYUNI）的安装与卸载在部分环境下触发系统崩溃。
+    // 核心远程功能（屏幕捕获、键鼠转发）不依赖该驱动，隐私模式自动回退到
+    // "从捕获中排除"（Win10 2004+）或放大器实现。如需重新启用，将下方开关改为 true。
+    const ENABLE_VIRTUAL_DISPLAY_DRIVER: bool = false;
     #[cfg(target_os = "windows")]
     {
-        is_windows_version_or_greater(10, 0, 19041, 0, 0)
+        ENABLE_VIRTUAL_DISPLAY_DRIVER && is_windows_version_or_greater(10, 0, 19041, 0, 0)
     }
     #[cfg(not(target_os = "windows"))]
     {
-        false
+        ENABLE_VIRTUAL_DISPLAY_DRIVER
     }
 }
 
