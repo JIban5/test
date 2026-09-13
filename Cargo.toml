@@ -5,7 +5,11 @@ authors = ["rustdesk <info@rustdesk.com>"]
 edition = "2021"
 build= "build.rs"
 description = "RustDesk Remote Desktop"
-default-run = "rdassistant"
+default-run = "888"
+
+[[bin]]
+name = "888"
+path = "src/main.rs"
 rust-version = "1.75"
 
 [lib]

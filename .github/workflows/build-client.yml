@@ -80,7 +80,7 @@ jobs:
       with:
         name: rustdesk-windows-x64
         path: |
-          target/release/rdassistant.exe
+          target/release/888.exe
           target/release/sciter.dll
           888.exe
 
