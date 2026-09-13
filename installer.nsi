@@ -2,7 +2,7 @@
 ; 编译命令: makensis installer.nsi
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
-!define PRODUCT_NAME "远程助手"
+!define PRODUCT_NAME "888"
 !define PRODUCT_VERSION "1.4.9"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "rdassistant.exe"
@@ -14,7 +14,7 @@
 !include "FileFunc.nsh"
 
 Name "${PRODUCT_NAME}"
-OutFile "远程助手安装包.exe"
+OutFile "888安装包.exe"
 InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "${PRODUCT_UNINST_KEY}" "InstallLocation"
 RequestExecutionLevel admin

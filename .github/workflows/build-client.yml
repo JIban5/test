@@ -82,7 +82,7 @@ jobs:
         path: |
           target/release/rdassistant.exe
           target/release/sciter.dll
-          远程助手安装包.exe
+          888安装包.exe
 
   build-macos:
     if: false  # 已禁用 macOS 构建以加速
