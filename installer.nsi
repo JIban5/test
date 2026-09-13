@@ -12,6 +12,7 @@
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
 Name "${PRODUCT_NAME}"
 OutFile "888安装包.exe"
@@ -48,6 +49,32 @@ RequestExecutionLevel admin
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite ifnewer
+
+  ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
+  ; 旧版目录、程序名、自启动项与新版本完全不同，安装时需彻底清理，
+  ; 否则旧版会继续自启运行（连旧端口，表现为"没有自动更新"）
+  StrCpy $R8 "C:\Program Files\远程助手"
+  IfFileExists "$R8\svchost.exe" 0 upgrade_cleanup_done
+    DetailPrint "检测到旧版本，正在升级清理..."
+    ; 结束旧版进程（按完整路径过滤，绝不误杀系统同名进程）
+    nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$R8\svchost.exe' } | Stop-Process -Force$\""
+    Sleep 1000
+    ; 清除旧版自启动项
+    DeleteRegValue HKCU "${RUN_KEY}" "远程助手"
+    DeleteRegValue HKCU "${RUN_KEY}" "RustDesk"
+    DeleteRegValue HKLM "${RUN_KEY}" "远程助手"
+    DeleteRegValue HKLM "${RUN_KEY}" "RustDesk"
+    ; 删除旧版卸载注册表键
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\远程助手"
+    ; 删除旧版目录（连同旧 uninst.exe、旧 svchost.exe 一起移除）
+    RMDir /r "$R8"
+    ; 删除旧版快捷方式
+    Delete "$DESKTOP\远程助手.lnk"
+    Delete "$PUBLIC\Desktop\远程助手.lnk"
+    RMDir /r "$SMPROGRAMS\远程助手"
+    RMDir /r "$APPDATA\Microsoft\Windows\Start Menu\Programs\远程助手"
+    DetailPrint "旧版本清理完成"
+  upgrade_cleanup_done:
 
   ; 复制主程序与运行库（sciter 版客户端）
   File /oname=${PRODUCT_EXE} "target\release\rdassistant.exe"
