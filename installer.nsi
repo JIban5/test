@@ -34,9 +34,8 @@ RequestExecutionLevel admin
 !insertmacro MUI_PAGE_DIRECTORY
 ; 安装过程页面
 !insertmacro MUI_PAGE_INSTFILES
-; 完成页面：点击【完成】后以后台托盘模式静默启动，不弹主界面
+; 完成页面：点击【完成】后启动程序并打开主界面
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXE}"
-!define MUI_FINISHPAGE_RUN_PARAMETERS "--tray"
 !insertmacro MUI_PAGE_FINISH
 
 ; 卸载页面

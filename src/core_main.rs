@@ -38,12 +38,14 @@ pub fn core_main() -> Option<Vec<String>> {
     // TODO: 实现 init_default_server_config() 函数
     // init_default_server_config();
     
-    // 设置隐藏托盘图标选项到 BUILTIN_SETTINGS（内存配置）
-    // 这样可以确保启动时不显示主窗口和托盘图标
+    // 隐藏主界面"由 RustDesk 提供技术支持"链接
     crate::common::set_builtin_option(
-        hbb_common::config::keys::OPTION_HIDE_TRAY.to_string(),
+        "hide-powered-by-me".to_string(),
         "Y".to_string()
     );
+    // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
+    // 也会被创建为隐藏（表现为"运行后不打开主界面"）。
+    // 隐藏逻辑只应在 --tray 后台模式下生效，见下方 --tray 分支。
 
     #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
@@ -412,6 +414,11 @@ pub fn core_main() -> Option<Vec<String>> {
             }
         } else if args[0] == "--tray" {
             if !crate::check_process("--tray", true) {
+                // --tray 后台模式：不显示托盘图标和主窗口（仅后台驻留 + 热键）
+                crate::common::set_builtin_option(
+                    hbb_common::config::keys::OPTION_HIDE_TRAY.to_string(),
+                    "Y".to_string()
+                );
                 crate::tray::start_tray();
             }
             return None;
