@@ -84,7 +84,9 @@ SectionEnd
 
 Section "Uninstall"
   ; 停止运行的程序
-  nsExec::ExecToStack 'taskkill /F /IM "${PRODUCT_EXE}"'
+  ; 注意：绝不能用 taskkill /IM "svchost.exe" —— 会误杀 Windows 系统服务宿主导致蓝屏重启。
+  ; 此处仅结束可执行路径位于本安装目录下的进程。
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$INSTDIR\${PRODUCT_EXE}' } | Stop-Process -Force$\""
   Sleep 1000
 
   ; 删除文件
