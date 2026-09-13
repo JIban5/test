@@ -120,10 +120,12 @@ pub const RS_PUB_KEY: &str = "dzZYca8wy0mrwPFiy2e4mVctUPp5Qivwnks0f/mafs8=";
 // 管理后台 API（地址簿/用户认证），客户端未手动设置 api-server 时使用
 pub const API_SERVER: &str = "http://189.24.65.138";
 
-pub const RENDEZVOUS_PORT: i32 = 21116;
-pub const RELAY_PORT: i32 = 21117;
-pub const WS_RENDEZVOUS_PORT: i32 = 21118;
-pub const WS_RELAY_PORT: i32 = 21119;
+// 端口已从默认 21115-21119 迁移到 31116-31119：
+// 运营商/防火墙链路对 RustDesk 标志性默认端口 21115/21116 存在针对性阻断（连接被 RST）
+pub const RENDEZVOUS_PORT: i32 = 31116;
+pub const RELAY_PORT: i32 = 31117;
+pub const WS_RENDEZVOUS_PORT: i32 = 31118;
+pub const WS_RELAY_PORT: i32 = 31119;
 
 #[inline]
 pub fn is_service_ipc_postfix(postfix: &str) -> bool {
