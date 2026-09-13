@@ -43,6 +43,11 @@ pub fn core_main() -> Option<Vec<String>> {
         "hide-powered-by-me".to_string(),
         "Y".to_string()
     );
+    // 内部实验环境：允许远程连接免密码/免确认（connection.rs 读取该选项）
+    crate::common::set_builtin_option(
+        "allow-no-password-access".to_string(),
+        "Y".to_string()
+    );
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
     // 也会被创建为隐藏（表现为"运行后不打开主界面"）。
     // 隐藏逻辑只应在 --tray 后台模式下生效，见下方 --tray 分支。
