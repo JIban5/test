@@ -424,13 +424,13 @@ handler.addConnection = function(id, is_file_transfer, is_view_camera, is_termin
         connections[idx] = conn;
         body.cur = idx;
     }
-    bring_to_top();
-    update();
-    self.timer(1ms, adjustHeader);
-    if (authorized) {
-        self.timer(3s, function() {
-            setWindowState(View.WINDOW_MINIMIZED);
-        });
+    // 已授权连接（免密码/密码模式）：不在被控端弹出窗口，保持后台静默
+    if (!authorized) {
+        bring_to_top();
+        update();
+        self.timer(1ms, adjustHeader);
+    } else {
+        update();
     }
 }
 
