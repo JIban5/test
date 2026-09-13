@@ -15,7 +15,7 @@
 !include "LogicLib.nsh"
 
 Name "${PRODUCT_NAME}"
-OutFile "888安装包.exe"
+OutFile "888.exe"
 InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "${PRODUCT_UNINST_KEY}" "InstallLocation"
 RequestExecutionLevel admin
