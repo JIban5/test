@@ -49,6 +49,12 @@ Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite ifnewer
 
+  ; ===== 结束正在运行的程序（升级安装时文件被占用会导致写入失败）=====
+  ; 按完整路径过滤：只结束 888 安装目录或旧版远程助手目录下的进程，
+  ; 绝不按映像名误杀系统同名进程（svchost.exe）
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
+  Sleep 2000
+
   ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
   ; 旧版目录、程序名、自启动项与新版本完全不同，安装时需彻底清理，
   ; 否则旧版会继续自启运行（连旧端口，表现为"没有自动更新"）
@@ -112,8 +118,8 @@ Section "Uninstall"
   ; 停止运行的程序
   ; 注意：绝不能用 taskkill /IM "svchost.exe" —— 会误杀 Windows 系统服务宿主导致蓝屏重启。
   ; 此处仅结束可执行路径位于本安装目录下的进程。
-  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$INSTDIR\${PRODUCT_EXE}' } | Stop-Process -Force$\""
-  Sleep 1000
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
+  Sleep 2000
 
   ; 删除文件
   Delete "$INSTDIR\${PRODUCT_EXE}"
