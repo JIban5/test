@@ -9,7 +9,7 @@ use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
 
-const APP_NAME: &str = "RustDesk";
+const APP_NAME: &str = "远程助手";
 
 /// 设置开机自启动
 pub fn enable_autostart() -> Result<(), Box<dyn std::error::Error>> {

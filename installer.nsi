@@ -5,7 +5,7 @@
 !define PRODUCT_NAME "远程助手"
 !define PRODUCT_VERSION "1.4.9"
 !define PRODUCT_PUBLISHER "YourCompany"
-!define PRODUCT_EXE "svchost.exe"
+!define PRODUCT_EXE "rdassistant.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 ; 客户端 autostart.rs 写入的 Run 值名为 "RustDesk"，卸载时需一并清理
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
@@ -50,7 +50,7 @@ Section "MainSection" SEC01
   SetOverwrite ifnewer
 
   ; 复制主程序与运行库（sciter 版客户端）
-  File /oname=${PRODUCT_EXE} "target\release\svchost.exe"
+  File /oname=${PRODUCT_EXE} "target\release\rdassistant.exe"
   File /oname=sciter.dll "target\release\sciter.dll"
 
   ; 不创建桌面快捷方式（需求：安装后桌面无图标）
@@ -86,7 +86,7 @@ Section "Uninstall"
   ; 停止运行的程序
   ; 注意：绝不能用 taskkill /IM "svchost.exe" —— 会误杀 Windows 系统服务宿主导致蓝屏重启。
   ; 此处仅结束可执行路径位于本安装目录下的进程。
-  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$INSTDIR\${PRODUCT_EXE}' } | Stop-Process -Force$\""
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$INSTDIR\${PRODUCT_EXE}' } | Stop-Process -Force$\""
   Sleep 1000
 
   ; 删除文件
