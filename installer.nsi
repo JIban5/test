@@ -112,6 +112,12 @@ Section "MainSection" SEC01
 
   ; 创建卸载程序
   WriteUninstaller "$INSTDIR\uninst.exe"
+
+  ; 注册并启动 Windows 系统服务（SYSTEM 后台常驻，独立于界面窗口；
+  ; 关闭主界面/进程退出都不影响远程连接）
+  ExecWait '"$INSTDIR\${PRODUCT_EXE}" --install-service'
+  Sleep 500
+  ExecWait 'net start "${PRODUCT_NAME}"'
 SectionEnd
 
 Section "Uninstall"
@@ -120,6 +126,11 @@ Section "Uninstall"
   ; 此处仅结束可执行路径位于本安装目录下的进程。
   nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
   Sleep 2000
+
+  ; 停止并删除系统服务
+  nsExec::ExecToStack 'sc stop "${PRODUCT_NAME}"'
+  nsExec::ExecToStack 'sc delete "${PRODUCT_NAME}"'
+  Sleep 1000
 
   ; 删除文件
   Delete "$INSTDIR\${PRODUCT_EXE}"
