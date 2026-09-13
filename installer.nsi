@@ -118,14 +118,12 @@ Function .onInit
   ReadRegStr $R0 HKLM "${PRODUCT_UNINST_KEY}" "UninstallString"
   StrCmp $R0 "" done
 
-  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
-  "${PRODUCT_NAME} 已经安装。$\n$\n点击 确定 卸载旧版本，点击 取消 退出安装。" \
-  IDOK uninst
+  ; 旧版卸载程序存在缺陷（taskkill 按映像名误杀系统进程导致蓝屏），
+  ; 因此不再自动执行旧卸载程序，直接覆盖安装即可
+  MessageBox MB_OK|MB_ICONINFORMATION \
+  "检测到已安装旧版本，将直接覆盖升级。$\n$\n若此前安装过旧测试版（svchost.exe），建议安装完成后重启一次电脑。" \
+  IDOK done
   Abort
-
-uninst:
-  ClearErrors
-  ExecWait '$R0 /S _?=$INSTDIR'
 
 done:
 FunctionEnd
