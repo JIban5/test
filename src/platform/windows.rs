@@ -4157,13 +4157,10 @@ impl Drop for WallPaperRemover {
 }
 
 fn get_uninstall_amyuni_idd() -> String {
-    match std::env::current_exe() {
-        Ok(path) => format!("\"{}\" --uninstall-amyuni-idd", path.to_str().unwrap_or("")),
-        Err(e) => {
-            log::warn!("Failed to get current exe path, cannot get command of uninstalling idd, Zzerror: {:?}", e);
-            "".to_string()
-        }
-    }
+    // 修复蓝屏问题：卸载流程中不再执行 AMYUNI IDD 驱动卸载命令。
+    // 驱动类卸载操作在部分环境下会触发系统崩溃（BSOD），本产品不安装该驱动，
+    // 因此卸载时无需触碰任何驱动。如需重新启用虚拟显示功能，请单独评估。
+    "".to_string()
 }
 
 #[inline]

@@ -335,9 +335,13 @@ pub fn core_main() -> Option<Vec<String>> {
                 return None;
             } else if args[0] == "--uninstall-amyuni-idd" {
                 #[cfg(windows)]
-                hbb_common::allow_err!(
-                    crate::virtual_display_manager::amyuni_idd::uninstall_driver()
-                );
+                // 仅在虚拟显示驱动启用时才执行驱动卸载（默认已禁用，
+                // 驱动卸载操作在部分环境下会触发系统蓝屏）
+                if crate::virtual_display_manager::is_virtual_display_supported() {
+                    hbb_common::allow_err!(
+                        crate::virtual_display_manager::amyuni_idd::uninstall_driver()
+                    );
+                }
                 return None;
             } else if args[0] == "--install-remote-printer" {
                 #[cfg(windows)]
