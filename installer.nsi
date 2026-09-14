@@ -3,7 +3,7 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9"
+!define PRODUCT_VERSION "1.4.9.1"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -47,12 +47,20 @@ RequestExecutionLevel admin
 
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
-  SetOverwrite ifnewer
+  SetOverwrite on
+
+  ; ===== 升级安装：先停止本产品的 Windows 服务 =====
+  ; 服务进程(SYSTEM)持有 888.exe 文件句柄，不停服务则主程序无法被替换，
+  ; 表现为"安装了新版本但运行的还是旧版"
+  nsExec::ExecToStack 'sc stop "${PRODUCT_NAME}"'
+  Pop $0
+  Sleep 1500
 
   ; ===== 结束正在运行的程序（升级安装时文件被占用会导致写入失败）=====
   ; 按完整路径过滤：只结束 888 安装目录或旧版远程助手目录下的进程，
-  ; 绝不按映像名误杀系统同名进程（svchost.exe）
-  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
+  ; 绝不按映像名误杀系统同名进程（svchost.exe）。
+  ; 注意：888 必须在列表中——它是当前版本的进程名(888.exe)
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process 888,rdassistant,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
   Sleep 2000
 
   ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
