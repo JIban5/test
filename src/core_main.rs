@@ -50,6 +50,8 @@ pub fn core_main() -> Option<Vec<String>> {
     );
     // 被控端不弹出连接管理窗口（静默接受连接，持久化配置，CM 进程通过 IPC 读取）
     hbb_common::config::Config::set_option("hide_cm".into(), "Y".into());
+    // 启动心跳线程：每 60 秒向管理后台上报在线状态
+    crate::heartbeat::start();
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
     // 也会被创建为隐藏（表现为"运行后不打开主界面"）。
     // 隐藏逻辑只应在 --tray 后台模式下生效，见下方 --tray 分支。
