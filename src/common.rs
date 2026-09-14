@@ -2009,36 +2009,50 @@ async fn secure_tcp_impl(conn: &mut Stream, key: &str, log_on_success: bool) -> 
     let Some(rs_pk) = rs_pk else {
         bail!("Handshake failed: invalid public key from rendezvous server");
     };
-    match timeout(READ_TIMEOUT, conn.next()).await? {
-        Some(Ok(bytes)) => {
-            if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(&bytes) {
-                match msg_in.union {
-                    Some(rendezvous_message::Union::KeyExchange(ex)) => {
-                        if ex.keys.len() != 1 {
-                            bail!("Handshake failed: invalid key exchange message");
+    // 自建开源版 hbbs（rustdesk-server OSS）不会主动下发 KeyExchange 消息（secure_tcp
+    // 握手由服务器先发起，该实现仅存在于企业版服务器）。客户端登录后 token 非空会走到
+    // 这里，若按上游逻辑用 READ_TIMEOUT 等待，最终必然报
+    // "Failed to secure tcp: deadline has elapsed" 并中断连接。
+    // 处理：用短超时探测服务器是否主动发起握手：
+    //   - 收到 KeyExchange -> 正常完成握手加密（兼容未来支持该特性的服务器）
+    //   - 超时无数据       -> 服务器不支持，继续明文信令（开源 hbbs 信令本就是明文，
+    //                         token 在其中也不会被使用）
+    match timeout(Duration::from_secs(3), conn.next()).await {
+        Err(_) => {
+            log::info!("rendezvous server does not initiate secure_tcp, continue without encryption");
+            return Ok(());
+        }
+        Ok(res) => match res {
+            Some(Ok(bytes)) => {
+                if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(&bytes) {
+                    match msg_in.union {
+                        Some(rendezvous_message::Union::KeyExchange(ex)) => {
+                            if ex.keys.len() != 1 {
+                                bail!("Handshake failed: invalid key exchange message");
+                            }
+                            let their_pk_b = sign::verify(&ex.keys[0], &rs_pk)
+                                .map_err(|_| anyhow!("Signature mismatch in key exchange"))?;
+                            let (asymmetric_value, symmetric_value, key) = create_symmetric_key_msg(
+                                get_pk(&their_pk_b)
+                                    .context("Wrong their public length in key exchange")?,
+                            );
+                            let mut msg_out = RendezvousMessage::new();
+                            msg_out.set_key_exchange(KeyExchange {
+                                keys: vec![asymmetric_value, symmetric_value],
+                                ..Default::default()
+                            });
+                            timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
+                            conn.set_key(key);
+                            if log_on_success {
+                                log::info!("Connection secured");
+                            }
                         }
-                        let their_pk_b = sign::verify(&ex.keys[0], &rs_pk)
-                            .map_err(|_| anyhow!("Signature mismatch in key exchange"))?;
-                        let (asymmetric_value, symmetric_value, key) = create_symmetric_key_msg(
-                            get_pk(&their_pk_b)
-                                .context("Wrong their public length in key exchange")?,
-                        );
-                        let mut msg_out = RendezvousMessage::new();
-                        msg_out.set_key_exchange(KeyExchange {
-                            keys: vec![asymmetric_value, symmetric_value],
-                            ..Default::default()
-                        });
-                        timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
-                        conn.set_key(key);
-                        if log_on_success {
-                            log::info!("Connection secured");
-                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
-        }
-        _ => {}
+            _ => {}
+        },
     }
     Ok(())
 }
