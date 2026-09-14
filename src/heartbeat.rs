@@ -10,21 +10,24 @@ pub fn start() {
     thread::spawn(|| loop {
         if let Err(e) = send_heartbeat() {
             // 生产构建不落盘日志，仅调试模式可见
-            log::info!("Heartbeat: {}", e);
+            hbb_common::log::info!("Heartbeat: {}", e);
         }
         thread::sleep(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
     });
 }
 
 fn send_heartbeat() -> hbb_common::ResultType<()> {
-    let api = crate::common::get_api_server();
+    let api = crate::common::get_api_server(
+        Config::get_option("api-server"),
+        Config::get_option("custom-rendezvous-server")
+    );
     if api.is_empty() {
         return Ok(());
     }
     let url = format!("{}/api/devices/register", api.trim_end_matches('/'));
     // 只上报 device_id，不覆盖管理后台/同步脚本设置的设备名称
     let body = serde_json::json!({ "device_id": Config::get_id() });
-    let client = crate::hbbs_http::http_client::create_http_client_with_url(&url);
+    let client = crate::hbbs_http::create_http_client_with_url(&url);
     let resp = client
         .post(&url)
         .json(&body)
