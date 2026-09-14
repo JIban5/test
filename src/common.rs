@@ -2017,7 +2017,7 @@ async fn secure_tcp_impl(conn: &mut Stream, key: &str, log_on_success: bool) -> 
     //   - 收到 KeyExchange -> 正常完成握手加密（兼容未来支持该特性的服务器）
     //   - 超时无数据       -> 服务器不支持，继续明文信令（开源 hbbs 信令本就是明文，
     //                         token 在其中也不会被使用）
-    match timeout(Duration::from_secs(3), conn.next()).await {
+    match timeout(3_000, conn.next()).await {
         Err(_) => {
             log::info!("rendezvous server does not initiate secure_tcp, continue without encryption");
             return Ok(());
