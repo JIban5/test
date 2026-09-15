@@ -51,11 +51,17 @@ var svg_menu = <svg #menu viewBox="0 0 512 512">
 	<circle cx="256" cy="64" r="64"/>
 </svg>;
 var svg_refresh_password = <svg #refresh-password xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2v6h6M2.66 15.57a10 10 0 1 0 .57-8.38"/></svg>;
+var svg_lock = <svg #lock xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>;
 
 var my_id = handler.get_id();
 function get_id() {
   my_id = handler.get_id();
   return my_id;
+}
+
+// 是否已登录(登录管理后台后才会显示 ID 远程连接功能)
+function isLoggedIn() {
+  return (handler.get_local_option("access_token") || "") != "";
 }
 
 function get_msgbox_width(width=500) {
@@ -701,6 +707,21 @@ function editDirectAccessPort() {
       }, msgbox_default_height, get_msgbox_width());
 }
 
+class LoginRequired: Reactor.Component {
+    function render() {
+        return <div .login-required>
+            {svg_lock}
+            <div .login-required-title>{translate('login-required-title')}</div>
+            <div .login-required-desc>{translate('login-required-tip')}</div>
+            <button .button #goto-login>{translate('Login')}</button>
+        </div>;
+    }
+
+    event click $(#goto-login) {
+        login();
+    }
+}
+
 class App: Reactor.Component
 {
     function this() {
@@ -740,15 +761,19 @@ class App: Reactor.Component
                 </div>
                 {!incoming_only && <div .right-pane>
                     <div .right-content>
-                        <div .card-connect>
-                            <div .title>{translate('Control Remote Desktop')}</div>
-                            <ID @{this.remote_id} />
-                            <div .right-buttons>
-                                <button .button .outline #file-transfer>{translate('Transfer file')}</button>
-                                <button .button #connect>{translate('Connect')}</button>
+                        {isLoggedIn() ?
+                        <div style="size:*; flow:vertical; border-spacing:1.6em">
+                            <div .card-connect>
+                                <div .title>{translate('Control Remote Desktop')}</div>
+                                <ID @{this.remote_id} />
+                                <div .right-buttons>
+                                    <button .button .outline #file-transfer>{translate('Transfer file')}</button>
+                                    <button .button #connect>{translate('Connect')}</button>
+                                </div>
                             </div>
+                            <MultipleSessions @{this.multipleSessions} />
                         </div>
-                        <MultipleSessions @{this.multipleSessions} />
+                        : <LoginRequired />}
                     </div>
                     {!outgoing_only ? <ConnectStatus @{this.connect_status} /> : ""}
                 </div>}
@@ -1555,6 +1580,7 @@ function login() {
             set_local_user_info(data.user);
             show_progress(-1);
             myIdMenu.update();
+            app.update();
             getAb();
         }, function(err, status) {
             abLoading = false;
@@ -1607,6 +1633,7 @@ function on_2fa_check(last_msg) {
                     set_local_user_info(data.user);
                     show_progress(-1);
                     myIdMenu.update();
+                    app.update();
                     getAb();
                 },
                 function(err, status) {
@@ -1628,6 +1655,7 @@ function reset_token() {
     handler.set_local_option("user_info", "");
     handler.set_local_option("selected-tags", "");
     myIdMenu.update();
+    app.update();
     resetAb();
     if (abComponent) {
         abComponent.update();

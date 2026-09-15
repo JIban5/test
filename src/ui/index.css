@@ -580,3 +580,43 @@ textarea.grey-text {
 div.install-me, div.trust-me {
     background: linear-gradient(left, #0D9488, #14B8A6);
 }
+
+/* ==================== 登录门禁 ==================== */
+/* 未登录时右侧显示登录引导,登录后才出现 ID 远程连接功能 */
+div.login-required {
+    width: 340px;
+    margin: * 0;
+    padding: 2.5em 1.5em;
+    background: color(bg);
+    border: color(border) solid 1px;
+    border-radius: 1.2em;
+    text-align: center;
+}
+
+div.login-required svg#lock {
+    width: 42px;
+    height: 42px;
+    stroke: #0D9488;
+    margin-bottom: 1em;
+}
+
+div.login-required .login-required-title {
+    font-size: 1.15em;
+    font-weight: bold;
+    color: color(text);
+    margin-bottom: 0.6em;
+}
+
+div.login-required .login-required-desc {
+    font-size: 0.95em;
+    color: color(light-text);
+    line-height: 1.6em;
+    margin-bottom: 1.4em;
+}
+
+div.login-required button {
+    height: 2.3em;
+    min-width: 120px;
+    border-radius: 0.6em;
+    font-weight: 600;
+}
