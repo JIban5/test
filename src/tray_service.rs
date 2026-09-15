@@ -68,11 +68,11 @@ pub fn toggle_window_visibility() {
                 }
             } else {
                 log::warn!("未找到主窗口 (标题: {})", app_name);
-                // 如果找不到窗口但用户按了热键，尝试启动主窗口
+                // 如果找不到窗口但用户按了热键，说明主窗口进程尚未启动，
+                // 直接启动主窗口进程（带界面启动）
                 if *visible {
                     log::info!("尝试启动主窗口...");
-                    // 发送IPC消息或启动新实例
-                    let _ = crate::ipc::connect(1000, "");
+                    let _ = crate::run_me(Vec::<&std::ffi::OsStr>::new());
                 }
             }
         }

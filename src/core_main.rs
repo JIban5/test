@@ -69,9 +69,19 @@ pub fn core_main() -> Option<Vec<String>> {
     }
     
     // 初始化全局热键 Ctrl+Alt+J
+    // 注意：--service 进程运行在 Session 0(SYSTEM)且开机自启，绝不能注册全局热键：
+    // 1) RegisterHotKey 系统内唯一，服务会先于用户会话进程抢占注册；
+    // 2) 之后 --tray 等用户会话进程注册失败，热键事件全部送到服务进程，
+    //    而服务进程 FindWindow 看不到用户桌面的主窗口 → 按热键无任何反应。
+    // 热键应由用户会话的常驻进程（--tray）或主窗口进程注册。
     #[cfg(target_os = "windows")]
     {
-        if let Err(e) = crate::tray_service::init_global_hotkey() {
+        let is_service_mode = std::env::args()
+            .skip(1)
+            .any(|a| a == "--service");
+        if is_service_mode {
+            log::info!("服务模式跳过全局热键注册（由用户会话进程负责）");
+        } else if let Err(e) = crate::tray_service::init_global_hotkey() {
             log::error!("初始化全局热键失败: {}", e);
         } else {
             crate::tray_service::start_hotkey_listener();
