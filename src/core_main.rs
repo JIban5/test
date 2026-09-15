@@ -464,6 +464,16 @@ pub fn core_main() -> Option<Vec<String>> {
                     "Y".to_string()
                 );
                 crate::tray::start_tray();
+                // 隐藏托盘时 start_tray() 没有托盘事件循环，会立即返回；
+                // 若此处直接返回，本进程会立刻退出，热键监听线程随之消失，
+                // 导致 Ctrl+Alt+J 无进程响应（唤不出主窗口）。
+                // 因此隐藏托盘模式下让本进程常驻，作为全局热键的持有者。
+                if crate::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y" {
+                    log::info!("托盘已隐藏：--tray 进程常驻以维持全局热键");
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_secs(3600));
+                    }
+                }
             }
             return None;
         } else if args[0] == "--install-service" {

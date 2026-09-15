@@ -3,7 +3,7 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.2"
+!define PRODUCT_VERSION "1.4.9.3"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -57,10 +57,10 @@ Section "MainSection" SEC01
   Sleep 1500
 
   ; ===== 结束正在运行的程序（升级安装时文件被占用会导致写入失败）=====
-  ; 按完整路径过滤：只结束 888 安装目录或旧版远程助手目录下的进程，
-  ; 绝不按映像名误杀系统同名进程（svchost.exe）。
-  ; 注意：888 必须在列表中——它是当前版本的进程名(888.exe)
-  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process 888,rdassistant,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
+  ; 只按进程完整路径过滤：安装目录(888)或旧版目录(远程助手)下的进程。
+  ; 注意：不能用 Get-Process 888 —— 纯数字参数会被 PowerShell 当作 PID 解析，
+  ; 结果查不到名为 888 的进程，旧程序杀不掉、主程序替换失败。
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and (($$_.Path -like '*\888\*') -or ($$_.Path -like '*远程助手*')) } | Stop-Process -Force$\""
   Sleep 2000
 
   ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
@@ -88,6 +88,15 @@ Section "MainSection" SEC01
     RMDir /r "$APPDATA\Microsoft\Windows\Start Menu\Programs\远程助手"
     DetailPrint "旧版本清理完成"
   upgrade_cleanup_done:
+
+  ; ===== 兜底：把仍被占用的旧主程序改名移开 =====
+  ; Windows 允许重命名正在运行的可执行文件（不允许删除），改名后
+  ; 新文件即可写入，旧文件安排重启后删除，彻底避免"升级但没换掉"
+  IfFileExists "$INSTDIR\${PRODUCT_EXE}" 0 move_old_done
+    DetailPrint "正在移开仍被占用的旧主程序..."
+    Rename "$INSTDIR\${PRODUCT_EXE}" "$INSTDIR\${PRODUCT_EXE}.old"
+    Delete /REBOOTOK "$INSTDIR\${PRODUCT_EXE}.old"
+  move_old_done:
 
   ; 复制主程序与运行库（sciter 版客户端）；并清理改名前的旧文件
   File /oname=${PRODUCT_EXE} "target\release\888.exe"
