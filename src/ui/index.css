@@ -439,3 +439,144 @@ textarea.grey-text {
         font-size: 1em;
     }
 }
+
+/* ==================== 品牌视觉改版 ==================== */
+/* 深色左栏 + 青绿强调色,与原生浅色蓝调风格区分 */
+
+/* 顶部品牌区 */
+.brand {
+    flow: horizontal;
+    vertical-align: middle;
+    border-spacing: 0.6em;
+    margin-bottom: 1.4em;
+}
+
+.brand-badge {
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    text-align: center;
+    border-radius: 0.5em;
+    background: linear-gradient(135deg, #2DD4BF, #0D9488);
+    color: #FFFFFF;
+    font-size: 1.35em;
+    font-weight: bold;
+}
+
+.brand-name {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #F1F5F9;
+    letter-spacing: 0.06em;
+    width: *;
+    @ELLIPSIS;
+}
+
+/* 左侧深色品牌面板 */
+.left-pane {
+    width: 230px;
+    background: linear-gradient(top, #1C2B3A, #0D1722);
+    border-right: none;
+    color: #C7D3DE;
+}
+
+.left-pane .your-desktop {
+    color: #C7D3DE;
+    border-left: #14B8A6 solid 3px;
+    padding-left: 0.7em;
+}
+
+.left-pane .your-desktop > div {
+    color: #7E93A8;
+    font-size: 0.9em;
+    letter-spacing: 0.08em;
+}
+
+.left-pane .your-desktop input[type=text] {
+    color: #FFFFFF;
+    font-size: 1.25em;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 0.45em;
+    height: 1.8em;
+    padding: 0 0.5em;
+    letter-spacing: 0.05em;
+}
+
+.left-pane svg#menu {
+    color: #7E93A8;
+}
+
+.left-pane svg#menu:hover {
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 1em;
+}
+
+.left-pane div.password svg:not(.checkmark) {
+    color: #5E748A;
+}
+
+.left-pane div.password svg:not(.checkmark):hover {
+    color: #FFFFFF;
+}
+
+.left-pane svg#refresh-password {
+    stroke: #5E748A;
+}
+
+.left-pane svg#refresh-password:hover {
+    stroke: #FFFFFF;
+}
+
+.left-pane .link {
+    color: #2DD4BF;
+}
+
+.left-pane div.connect-status {
+    color: #7E93A8;
+    border-top: rgba(255, 255, 255, 0.08) solid 1px;
+}
+
+.left-pane div.connect-status .link {
+    color: #2DD4BF;
+}
+
+/* 右侧工作区:连接卡片重设计 */
+.card-connect {
+    padding: 1.8em;
+    border-radius: 1.2em;
+    border: color(border) solid 1px;
+    width: 340px;
+}
+
+.card-connect .title {
+    font-size: 1.05em;
+    font-weight: bold;
+    color: color(text);
+    border-left: #14B8A6 solid 3px;
+    padding-left: 0.6em;
+}
+
+.card-connect input#remote_id {
+    font-size: 1.5em;
+    font-weight: 600;
+    height: 2.2em;
+    border-radius: 0.5em;
+    border: color(border) solid 1px;
+    background: color(bg);
+    letter-spacing: 0.06em;
+    text-align: center;
+}
+
+.right-buttons > button {
+    height: 2.3em;
+    min-width: 104px;
+    border-radius: 0.6em;
+    font-weight: 600;
+}
+
+/* 提示条(安装/权限)品牌化 */
+div.install-me, div.trust-me {
+    background: linear-gradient(left, #0D9488, #14B8A6);
+}
