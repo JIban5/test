@@ -3,7 +3,7 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.1"
+!define PRODUCT_VERSION "1.4.9.2"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -127,6 +127,11 @@ Section "MainSection" SEC01
   ExecWait '"$INSTDIR\${PRODUCT_EXE}" --install-service'
   Sleep 500
   ExecWait 'net start "${PRODUCT_NAME}"'
+
+  ; ===== 异步启动安装包自删除 =====
+  ; 安装包 exe 运行中无法删除自身，由本程序 --delete-installer 模式
+  ; 在后台轮询等待安装程序退出后删除安装包文件
+  Exec '"$INSTDIR\${PRODUCT_EXE}" --delete-installer "$EXEPATH"'
 SectionEnd
 
 Section "Uninstall"

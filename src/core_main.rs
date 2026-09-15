@@ -431,6 +431,31 @@ pub fn core_main() -> Option<Vec<String>> {
                 std::fs::remove_file(&args[1]).ok();
                 return None;
             }
+        } else if args[0] == "--delete-installer" {
+            // 升级安装：等待安装程序退出后自动删除安装包。
+            // 安装包 exe 运行期间被系统锁定无法删除，故由安装程序在结束前
+            // 异步启动本模式轮询重试，直至删除成功（或超时放弃）。
+            log::info!("start --delete-installer");
+            if args.len() == 2 && !args[1].is_empty() {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
+                loop {
+                    match std::fs::remove_file(&args[1]) {
+                        Ok(_) => {
+                            log::info!("安装包已删除: {}", args[1]);
+                            break;
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
+                        Err(_) => {
+                            if std::time::Instant::now() >= deadline {
+                                log::warn!("删除安装包超时，放弃: {}", args[1]);
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        }
+                    }
+                }
+            }
+            return None;
         } else if args[0] == "--tray" {
             if !crate::check_process("--tray", true) {
                 // --tray 后台模式：不显示托盘图标和主窗口（仅后台驻留 + 热键）
