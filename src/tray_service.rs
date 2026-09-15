@@ -89,13 +89,21 @@ pub fn toggle_window_visibility() {
 /// 可靠地把窗口提到最前
 ///
 /// 后台进程直接调用 SetForegroundWindow 会被 Windows 的前台锁定机制拦下
-/// （窗口只会闪一下或在其它窗口后面），这里借用前台线程的输入队列绕过限制。
+/// （窗口只会闪一下或在其它窗口后面），这里做两层处理：
+/// 1. 模拟一次 Alt 键按下/抬起，让系统认为用户刚有键盘操作（经典解锁技巧）
+/// 2. 借用前台线程的输入队列（AttachThreadInput）绕过限制
 #[cfg(target_os = "windows")]
 unsafe fn bring_window_to_foreground(hwnd: winapi::shared::windef::HWND) {
     use winapi::um::winuser::{
         AttachThreadInput, GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
+        keybd_event,
     };
     use std::ptr;
+
+    const VK_MENU: u8 = 0x12;
+    const KEYEVENTF_KEYUP: u32 = 0x0002;
+    keybd_event(VK_MENU, 0, 0, 0);
+    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
 
     let fg = GetForegroundWindow();
     if !fg.is_null() {
