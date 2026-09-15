@@ -712,7 +712,6 @@ class LoginRequired: Reactor.Component {
         return <div .login-required>
             {svg_lock}
             <div .login-required-title>{translate('login-required-title')}</div>
-            <div .login-required-desc>{translate('login-required-tip')}</div>
             <button .button #goto-login>{translate('Login')}</button>
         </div>;
     }
