@@ -91,7 +91,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       ),
       buildTip(context),
       if (!isOutgoingOnly) buildIDBoard(context),
-      if (!isOutgoingOnly) buildPasswordBoard(context),
+      // 定制版隐藏主界面"一次性密码"卡片：被控权限由管理后台统一控制，
+      // 不向机房使用者暴露临时密码/固定密码信息（buildPasswordBoard 保留代码便于恢复）
+      // if (!isOutgoingOnly) buildPasswordBoard(context),
       FutureBuilder<Widget>(
         future: Future.value(
             Obx(() => buildHelpCards(stateGlobal.updateUrl.value))),
@@ -466,14 +468,18 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           await rustDeskWinManager.closeAllSubWindows();
           bind.mainGotoInstall();
         });
-      } else if (bind.mainIsInstalledLowerVersion()) {
-        return buildInstallCard(
-            "Status", "Your installation is lower version.", "Click to upgrade",
-            () async {
-          await rustDeskWinManager.closeAllSubWindows();
-          bind.mainUpdateMe();
-        });
       }
+      // 定制版隐藏"你安装的版本比当前运行的低"提示卡片：
+      // 其"点击升级"会调用 mainUpdateMe() 下载官方版本，覆盖定制客户端。
+      // 版本不一致时请由管理员统一用新版 Setup.exe 覆盖安装。
+      // else if (bind.mainIsInstalledLowerVersion()) {
+      //   return buildInstallCard(
+      //       "Status", "Your installation is lower version.", "Click to upgrade",
+      //       () async {
+      //     await rustDeskWinManager.closeAllSubWindows();
+      //     bind.mainUpdateMe();
+      //   });
+      // }
     } else if (isMacOS) {
       final isOutgoingOnly = bind.isOutgoingOnly();
       if (!(isOutgoingOnly || bind.mainIsCanScreenRecording(prompt: false))) {
