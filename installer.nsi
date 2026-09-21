@@ -3,7 +3,7 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.4"
+!define PRODUCT_VERSION "1.4.9.6"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -49,19 +49,41 @@ Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite on
 
-  ; ===== 升级安装：先停止本产品的 Windows 服务 =====
-  ; 服务进程(SYSTEM)持有 888.exe 文件句柄，不停服务则主程序无法被替换，
-  ; 表现为"安装了新版本但运行的还是旧版"
+  ; ===== 覆盖升级：彻底清理旧服务与进程（等效卸载+安装，无需先手动卸载）=====
+  IntCmp $R1 1 0 after_upgrade_stop
+
+  ; 1) 请求停止旧服务（服务进程 SYSTEM 持有 888.exe 文件句柄，不停无法替换）
   nsExec::ExecToStack 'sc stop "${PRODUCT_NAME}"'
   Pop $0
-  Sleep 1500
+  Sleep 1000
 
-  ; ===== 结束正在运行的程序（升级安装时文件被占用会导致写入失败）=====
-  ; 只按进程完整路径过滤：安装目录(888)或旧版目录(远程助手)下的进程。
-  ; 注意：不能用 Get-Process 888 —— 纯数字参数会被 PowerShell 当作 PID 解析，
-  ; 结果查不到名为 888 的进程，旧程序杀不掉、主程序替换失败。
+  ; 2) 等待服务真正进入 STOPPED 状态。
+  ;    强杀进程时 SCM 需要数秒确认退出；STOP_PENDING 期间
+  ;    sc delete / sc create / sc start 都会失败（1072 等），
+  ;    这正是旧版"覆盖安装后服务没更新"的根因。
+  StrCpy $1 0
+wait_service_stopped:
+  ; nsExec 不经 cmd.exe，管道需显式 cmd /c 包裹
+  nsExec::Exec 'cmd /c sc query "${PRODUCT_NAME}" | find "STOPPED"'
+  Pop $0    ; exit code: 0 = 已包含 STOPPED
+  IntCmp $0 0 service_stopped
+  Sleep 1000
+  IntOp $1 $1 + 1
+  IntCmp $1 5 0 wait_service_stopped
+service_stopped:
+
+  ; 3) 结束所有残留进程（按完整路径过滤：安装目录(888)或旧版目录(远程助手)。
+  ;    注意：不能用 Get-Process 888 —— 纯数字会被 PowerShell 当作 PID 解析，
+  ;    导致查不到名为 888 的进程、旧程序杀不掉）
   nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and (($$_.Path -like '*\888\*') -or ($$_.Path -like '*远程助手*')) } | Stop-Process -Force$\""
   Sleep 2000
+
+  ; 4) 删除旧服务注册（进程已杀，SCM 必定已完成状态收敛，delete 必成功），
+  ;    保证稍后 --install-service 的 sc create / sc start 干净成功
+  nsExec::Exec 'sc delete "${PRODUCT_NAME}"'
+  Sleep 1000
+
+after_upgrade_stop:
 
   ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
   ; 旧版目录、程序名、自启动项与新版本完全不同，安装时需彻底清理，
@@ -186,14 +208,17 @@ Section "Uninstall"
 SectionEnd
 
 Function .onInit
+  ; $R1: 0=全新安装 1=覆盖升级（Section 中据此决定是否走升级清理流程）
+  StrCpy $R1 0
   ; 检查是否已安装
   ReadRegStr $R0 HKLM "${PRODUCT_UNINST_KEY}" "UninstallString"
   StrCmp $R0 "" done
+  StrCpy $R1 1
 
   ; 旧版卸载程序存在缺陷（taskkill 按映像名误杀系统进程导致蓝屏），
   ; 因此不再自动执行旧卸载程序，直接覆盖安装即可
   MessageBox MB_OK|MB_ICONINFORMATION \
-  "检测到已安装旧版本，将直接覆盖升级。$\n$\n若此前安装过旧测试版（svchost.exe），建议安装完成后重启一次电脑。" \
+  "检测到已安装旧版本，将自动完成升级。$\n$\n若此前安装过旧测试版（svchost.exe），建议安装完成后重启一次电脑。" \
   IDOK done
   Abort
 
