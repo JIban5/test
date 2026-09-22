@@ -4,9 +4,6 @@
 use hbb_common::log;
 use std::sync::{Arc, Mutex};
 
-#[cfg(target_os = "windows")]
-use winapi::um::winuser;
-
 lazy_static::lazy_static! {
     static ref WINDOW_VISIBLE: Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
 }
@@ -146,26 +143,6 @@ unsafe fn bring_window_to_foreground(hwnd: winapi::shared::windef::HWND) {
         }
     }
     SetForegroundWindow(hwnd);
-}
-
-/// 热键事件处理循环
-pub fn start_hotkey_listener() {
-    #[cfg(target_os = "windows")]
-    {
-        std::thread::spawn(|| {
-            use global_hotkey::GlobalHotKeyEvent;
-            
-            let receiver = GlobalHotKeyEvent::receiver();
-            log::info!("热键监听线程已启动");
-            
-            loop {
-                if let Ok(_event) = receiver.recv() {
-                    log::info!("检测到热键按下 Ctrl+Alt+J");
-                    toggle_window_visibility();
-                }
-            }
-        });
-    }
 }
 
 /// 最小化到系统托盘
