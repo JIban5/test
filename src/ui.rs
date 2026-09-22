@@ -217,7 +217,7 @@ pub fn start(args: &mut [String]) {
 
 /// 创建隐藏模式的主窗口（加载主界面但不显示），供窗口被用户关闭后重建常驻。
 fn create_hidden_main_frame() -> sciter::Window {
-    let frame = sciter::WindowBuilder::main_window().create();
+    let mut frame = sciter::WindowBuilder::main_window().create();
     frame.set_title(&crate::get_app_name());
     frame.event_handler(UI {});
     frame.sciter_handler(UIHostHandler {});
