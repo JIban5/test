@@ -161,6 +161,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("End-user license agreement", "用户协议"),
         ("Generating ...", "正在生成..."),
         ("Your installation is lower version.", "你安装的版本比当前运行的低。"),
+        ("Uninstall Software", "卸载软件"),
+        ("uninstall-confirm-tip", "确定要卸载本软件吗？<br>卸载后将无法再被远程连接。"),
         ("not_close_tcp_tip", "请在使用隧道的时候，不要关闭本窗口"),
         ("Listening ...", "正在等待隧道连接..."),
         ("Remote Host", "远程主机"),

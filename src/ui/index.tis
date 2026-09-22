@@ -721,6 +721,23 @@ class LoginRequired: Reactor.Component {
     }
 }
 
+// 主界面一键卸载（定制版）：确认后调用 handler.uninstall_me()，
+// 平台卸载批处理会停止服务、结束本进程、删除文件与注册表
+class UninstallMe: Reactor.Component {
+    function render() {
+        return <div style="flow:horizontal; margin: * 0 0 0;">
+            <button .button #uninstall-me .outline style="font-size:0.8em; height:1.8em;">{translate('Uninstall Software')}</button>
+        </div>;
+    }
+
+    event click $(#uninstall-me) {
+        msgbox("custom", translate("Uninstall Software"), translate("uninstall-confirm-tip"), "", function(res) {
+            if (res == null) return;  // 用户取消
+            handler.uninstall_me();
+        });
+    }
+}
+
 class App: Reactor.Component
 {
     function this() {
@@ -747,6 +764,7 @@ class App: Reactor.Component
                             {key_confirmed ? <input type="text" readonly value={formatId(get_id())}/> : translate("Generating ...")}
                         </div>}
                         {!outgoing_only && false && <PasswordArea />}
+                        {!outgoing_only && <UninstallMe />}
                     </div>
                     {software_update_url && !disable_installation ? <UpdateMe /> : ""}
                     {false && is_win && handler.is_installed() && !software_update_url && handler.is_installed_lower_version() && !disable_installation ? <UpgradeMe /> : ""}

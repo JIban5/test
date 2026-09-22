@@ -241,6 +241,17 @@ impl UI {
         goto_install();
     }
 
+    // 主界面一键卸载：调用平台卸载（停服务/杀进程/删文件/清注册表）。
+    // kill_self=true：批处理会结束本进程，用户无需手动关闭程序。
+    fn uninstall_me(&mut self) {
+        #[cfg(windows)]
+        {
+            if let Err(e) = crate::platform::windows::uninstall_me(true) {
+                log::error!("uninstall_me failed: {}", e);
+            }
+        }
+    }
+
     fn install_me(&mut self, _options: String, _path: String) {
         install_me(_options, _path, false, false);
     }
@@ -773,6 +784,7 @@ impl sciter::EventHandler for UI {
         fn install_path();
         fn install_options();
         fn goto_install();
+        fn uninstall_me();
         fn is_process_trusted(bool);
         fn is_can_screen_recording(bool);
         fn is_installed_daemon(bool);
