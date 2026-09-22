@@ -5,38 +5,67 @@ use hbb_common::log;
 use std::sync::{Arc, Mutex};
 
 #[cfg(target_os = "windows")]
-use global_hotkey::{GlobalHotKeyManager, hotkey::{HotKey, Code, Modifiers}};
+use winapi::um::winuser;
 
 lazy_static::lazy_static! {
-    static ref HOTKEY_MANAGER: Arc<Mutex<Option<GlobalHotKeyManager>>> = Arc::new(Mutex::new(None));
     static ref WINDOW_VISIBLE: Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
 }
 
-/// 初始化全局热键 Ctrl+Alt+J
-pub fn init_global_hotkey() -> Result<(), Box<dyn std::error::Error>> {
+// RegisterHotKey 参数（自定义常量，避免 winapi 版本差异）
+const HOTKEY_ID: i32 = 0xB001;
+const MOD_ALT: u32 = 0x0001;
+const MOD_CONTROL: u32 = 0x0002;
+const VK_J: u32 = 0x4A; // 'J' 键虚拟键码
+const WM_HOTKEY: u32 = 0x0312;
+
+/// 启动全局热键监听线程（Ctrl+Alt+J）
+///
+/// 在本线程内完成 RegisterHotKey + GetMessage 消息泵闭环：
+/// RegisterHotKey 的 WM_HOTKEY 消息投递到【注册线程】的消息队列，
+/// 因此注册与消息泵必须在同一线程，缺一不可。
+/// 之前依赖 global-hotkey 库且主线程 sleep 死循环常驻，
+/// 消息无人泵导致热键事件永远无法分发（表现为快捷键完全无效）。
+pub fn start_hotkey_listener() {
     #[cfg(target_os = "windows")]
-    {
-        let manager = GlobalHotKeyManager::new()?;
-        
-        // 注册 Ctrl+Alt+J
-        let hotkey = HotKey::new(
-            Some(Modifiers::CONTROL | Modifiers::ALT),
-            Code::KeyJ,
-        );
-        
-        manager.register(hotkey)?;
-        
-        *HOTKEY_MANAGER.lock().unwrap() = Some(manager);
-        
-        log::info!("全局热键 Ctrl+Alt+J 已注册");
-        Ok(())
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        log::warn!("当前系统不支持全局热键");
-        Ok(())
-    }
+    std::thread::spawn(|| unsafe {
+        use winapi::um::winuser::{
+            DispatchMessageW, GetMessageW, MSG, RegisterHotKey, TranslateMessage,
+        };
+
+        // 注册 Ctrl+Alt+J（同线程注册，消息才会进本线程队列）。
+        // 失败常见原因：组合键被其他程序通过 RegisterHotKey 占用，
+        // 或升级场景中旧版进程尚未完全退出（持有同一注册），稍等重试。
+        let mut registered = false;
+        for _ in 0..5 {
+            if RegisterHotKey(
+                std::ptr::null_mut(),
+                HOTKEY_ID,
+                MOD_CONTROL | MOD_ALT,
+                VK_J,
+            ) != 0
+            {
+                registered = true;
+                break;
+            }
+            log::warn!("注册全局热键失败，2 秒后重试（可能被占用或旧进程尚未退出）");
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        if !registered {
+            log::error!("注册全局热键 Ctrl+Alt+J 最终失败，热键不可用");
+            return;
+        }
+        log::info!("全局热键 Ctrl+Alt+J 已注册，监听线程启动");
+
+        let mut msg: MSG = std::mem::zeroed();
+        while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+            if msg.message == WM_HOTKEY && msg.wParam as i32 == HOTKEY_ID {
+                log::info!("检测到热键按下 Ctrl+Alt+J");
+                toggle_window_visibility();
+            }
+            TranslateMessage(&mut msg);
+            DispatchMessageW(&mut msg);
+        }
+    });
 }
 
 /// 切换窗口显示/隐藏

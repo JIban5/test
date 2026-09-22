@@ -153,7 +153,7 @@ remote_printer = { path = "libs/remote_printer" }
 impersonate_system = { git = "https://github.com/rustdesk-org/impersonate-system" }
 shared_memory = "0.12"
 tauri-winrt-notification = "0.1"
-global-hotkey = "0.5"
+global-hotkey = { version = "0.5", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"

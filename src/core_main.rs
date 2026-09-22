@@ -84,9 +84,9 @@ pub fn core_main() -> Option<Vec<String>> {
             .any(|a| a == "--service");
         if is_service_mode {
             log::info!("服务模式跳过全局热键注册（由用户会话进程负责）");
-        } else if let Err(e) = crate::tray_service::init_global_hotkey() {
-            log::error!("初始化全局热键失败: {}", e);
         } else {
+            // 注册 + 消息泵在 listener 线程内闭环（见 tray_service::start_hotkey_listener），
+            // 不依赖调用线程的消息循环，--tray/主窗口/其他进程均可安全调用
             crate::tray_service::start_hotkey_listener();
             log::info!("全局热键 Ctrl+Alt+J 已启用");
         }
@@ -480,28 +480,9 @@ pub fn core_main() -> Option<Vec<String>> {
                 // 因此隐藏托盘模式下让本进程常驻，作为全局热键的持有者。
                 if crate::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y" {
                     log::info!("托盘已隐藏：--tray 进程常驻以维持全局热键");
-                    // 关键：主线程必须泵 Windows 消息。global-hotkey 通过隐藏窗口
-                    // 的 WM_HOTKEY 消息分发热键事件，之前用 sleep 死循环常驻导致
-                    // 消息永远无人处理，表现为"Ctrl+Alt+J 无任何反应"。
-                    // GetMessage 阻塞等待消息，空闲时不耗 CPU。
-                    #[cfg(target_os = "windows")]
-                    {
-                        use winapi::um::winuser::{
-                            DispatchMessageW, GetMessageW, MSG, TranslateMessage,
-                        };
-                        unsafe {
-                            let mut msg: MSG = std::mem::zeroed();
-                            loop {
-                                // 返回 0 = WM_QUIT，-1 = 错误，此时退出进程
-                                if GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) <= 0 {
-                                    break;
-                                }
-                                TranslateMessage(&mut msg);
-                                DispatchMessageW(&mut msg);
-                            }
-                        }
-                    }
-                    #[cfg(not(target_os = "windows"))]
+                    // 热键的注册与消息泵已闭环在 listener 线程内
+                    // （见 tray_service::start_hotkey_listener），
+                    // 主线程 sleep 常驻即可，不参与消息处理。
                     loop {
                         std::thread::sleep(std::time::Duration::from_secs(3600));
                     }
