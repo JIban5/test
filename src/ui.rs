@@ -184,18 +184,58 @@ pub fn start(args: &mut [String]) {
         page
     ));
     let hide_cm = *cm::HIDE_CM.lock().unwrap();
-    
+
     // 检查是否需要隐藏主窗口（安装后或配置隐藏托盘时）
     let should_hide = (args.is_empty() && crate::ui_interface::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y")
         || (!args.is_empty() && args[0] == "--cm" && hide_cm);
-    
+
     if should_hide {
         // run_app calls expand(show) + run_loop, we use collapse(hide) + run_loop instead to create a hidden window
         frame.collapse(true);
         frame.run_loop();
         return;
     }
+
+    if !args.is_empty() {
+        frame.run_app();
+        return;
+    }
+
+    // ===== 主窗口常驻循环（定制版需求）=====
+    // 用户点界面"叉"后窗口销毁，但进程不退出：自动以隐藏模式重建窗口，
+    // 保持被控连接与 Ctrl+Alt+J 热键持续可用，用户可随时通过热键唤出界面。
+    // 退出途径：主界面"卸载软件"按钮或任务管理器结束进程。
     frame.run_app();
+    log::info!("主窗口被用户关闭，以隐藏模式重建窗口（进程保持常驻以维持被控与热键）");
+    frame = create_hidden_main_frame();
+    loop {
+        frame.run_loop();
+        log::info!("隐藏的主窗口再次被关闭，继续隐藏重建（进程保持常驻）");
+        frame = create_hidden_main_frame();
+    }
+}
+
+/// 创建隐藏模式的主窗口（加载主界面但不显示），供窗口被用户关闭后重建常驻。
+fn create_hidden_main_frame() -> sciter::Window {
+    let frame = sciter::WindowBuilder::main_window().create();
+    frame.set_title(&crate::get_app_name());
+    frame.event_handler(UI {});
+    frame.sciter_handler(UIHostHandler {});
+    #[cfg(feature = "inline")]
+    {
+        let html = inline::get_index();
+        frame.load_html(html.as_bytes(), Some("index.html"));
+    }
+    #[cfg(not(feature = "inline"))]
+    frame.load_file(&format!(
+        "file://{}/src/ui/{}",
+        std::env::current_dir()
+            .map(|c| c.display().to_string())
+            .unwrap_or("".to_owned()),
+        "index.html"
+    ));
+    frame.collapse(true);
+    frame
 }
 
 struct UI {}
