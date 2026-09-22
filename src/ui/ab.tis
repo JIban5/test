@@ -666,7 +666,8 @@ function getAb() {
     abLoading = true;
     abError = "";
     app.update();
-    httpRequest(handler.get_api_server() + "/api/ab/get", #post, {}, function(data) {
+    // 上报本机设备 ID，服务端据此过滤掉自己（自己无法也不需要远程自己）
+    httpRequest(handler.get_api_server() + "/api/ab/get", #post, { data: JSON.stringify({id: handler.get_id()}) }, function(data) {
         if (data) {
             if (data.error) {
                 handleAbError(data.error);
