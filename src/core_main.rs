@@ -457,7 +457,14 @@ pub fn core_main() -> Option<Vec<String>> {
             }
             return None;
         } else if args[0] == "--tray" {
-            if !crate::check_process("--tray", true) {
+            // 单实例用命名互斥锁而非 check_process：check_process 依赖 sysinfo
+            // 的 cmd() 参数解析，存在误判/漏判风险；互斥锁随进程退出自动释放，
+            // 升级杀掉旧进程后新进程即可获锁常驻。
+            #[cfg(target_os = "windows")]
+            let tray_acquired = crate::platform::windows::try_lock_tray_single_instance();
+            #[cfg(not(target_os = "windows"))]
+            let tray_acquired = !crate::check_process("--tray", true);
+            if tray_acquired {
                 // --tray 后台模式：不显示托盘图标和主窗口（仅后台驻留 + 热键）
                 crate::common::set_builtin_option(
                     hbb_common::config::keys::OPTION_HIDE_TRAY.to_string(),
@@ -470,6 +477,28 @@ pub fn core_main() -> Option<Vec<String>> {
                 // 因此隐藏托盘模式下让本进程常驻，作为全局热键的持有者。
                 if crate::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y" {
                     log::info!("托盘已隐藏：--tray 进程常驻以维持全局热键");
+                    // 关键：主线程必须泵 Windows 消息。global-hotkey 通过隐藏窗口
+                    // 的 WM_HOTKEY 消息分发热键事件，之前用 sleep 死循环常驻导致
+                    // 消息永远无人处理，表现为"Ctrl+Alt+J 无任何反应"。
+                    // GetMessage 阻塞等待消息，空闲时不耗 CPU。
+                    #[cfg(target_os = "windows")]
+                    {
+                        use winapi::um::winuser::{
+                            DispatchMessageW, GetMessageW, MSG, TranslateMessage,
+                        };
+                        unsafe {
+                            let mut msg: MSG = std::mem::zeroed();
+                            loop {
+                                // 返回 0 = WM_QUIT，-1 = 错误，此时退出进程
+                                if GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) <= 0 {
+                                    break;
+                                }
+                                TranslateMessage(&mut msg);
+                                DispatchMessageW(&mut msg);
+                            }
+                        }
+                    }
+                    #[cfg(not(target_os = "windows"))]
                     loop {
                         std::thread::sleep(std::time::Duration::from_secs(3600));
                     }

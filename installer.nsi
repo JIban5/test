@@ -3,7 +3,7 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.7"
+!define PRODUCT_VERSION "1.4.9.8"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -185,7 +185,10 @@ Section "Uninstall"
   ; 停止运行的程序
   ; 注意：绝不能用 taskkill /IM "svchost.exe" —— 会误杀 Windows 系统服务宿主导致蓝屏重启。
   ; 此处仅结束可执行路径位于本安装目录下的进程。
-  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process rdassistant,888,svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\888\*' -or $$_.Path -like '*远程助手*' } | Stop-Process -Force$\""
+  ; 注意：不能用 Get-Process rdassistant,888,svchost —— 纯数字 "888" 会被 PowerShell
+  ; 当作 PID 解析，查询失败返回空，导致 888.exe 进程杀不掉、文件删不掉（假卸载成功）。
+  ; 必须无参 Get-Process 列出全部进程后按完整路径过滤。
+  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and (($$_.Path -like '*\888\*') -or ($$_.Path -like '*远程助手*')) } | Stop-Process -Force$\""
   Sleep 2000
 
   ; 停止并删除系统服务
