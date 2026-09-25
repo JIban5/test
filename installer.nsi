@@ -7,15 +7,13 @@
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
 VIProductVersion "1.4.9.10.0"
-VIAddTranslation 2052
-VIFileInfo\Translation 2052 936
-VIFileInfo\FileDescription "888"
-VIFileInfo\ProductName "888"
-VIFileInfo\CompanyName "888"
-VIFileInfo\LegalCopyright "888"
-VIFileInfo\FileVersion "1.4.9.10"
-VIFileInfo\ProductVersion "1.4.9.10"
-VIFileInfo\OriginalFilename "888.exe"
+VIAddVersionKey /LANG=2052 "FileDescription" "888"
+VIAddVersionKey /LANG=2052 "ProductName" "888"
+VIAddVersionKey /LANG=2052 "CompanyName" "888"
+VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.10"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.10"
+VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
