@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.10"
+!define PRODUCT_VERSION "1.4.9.11"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.10.0"
+VIProductVersion "1.4.9.11.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.10"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.10"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.11"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.11"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -196,12 +196,18 @@ after_upgrade_stop:
   ; 保证安装完成后马上就能用 Ctrl+Alt+J 唤出主窗口。
   Exec '"$INSTDIR\${PRODUCT_EXE}" --tray'
 
-  ; ===== 异步启动安装包自删除（双保险）=====
-  ; 1) 客户端 --delete-installer 模式：轮询等待安装程序退出后删除（600 秒超时）
-  Exec '"$INSTDIR\${PRODUCT_EXE}" --delete-installer "$EXEPATH"'
-  ; 2) cmd 延迟删除兜底：多轮重试（5s/15s/30s/60s）——用户可能在完成页
+  ; ===== 异步启动安装包自删除（三重保险）=====
+  ; 1) 清单文件：把安装包完整路径写入 $INSTDIR，由服务进程/--tray 进程启动时
+  ;    轮询删除（服务常驻，每次启动都会重试——终极兜底，确保最终删除成功）
+  FileOpen $0 "$INSTDIR\installer_to_delete.txt" w
+  FileWrite $0 "$EXEPATH$\r$\n"
+  FileWrite $0 "$EXEDIR\$EXEFILE$\r$\n"
+  FileClose $0
+  ; 2) 客户端 --delete-installer 模式：轮询等待安装程序退出后删除（600 秒超时）
+  Exec '"$INSTDIR\${PRODUCT_EXE}" --delete-installer "$EXEDIR\$EXEFILE"'
+  ; 3) cmd 延迟删除：多轮重试（5s/15s/30s/60s）——用户可能在完成页
   ;    停留较久，单次 5 秒删除会因安装器仍在运行而失败且不再重试
-  Exec 'cmd /c ping -n 6 127.0.0.1 > nul & del /f /q "$EXEPATH" & ping -n 16 127.0.0.1 > nul & del /f /q "$EXEPATH" & ping -n 31 127.0.0.1 > nul & del /f /q "$EXEPATH" & ping -n 61 127.0.0.1 > nul & del /f /q "$EXEPATH"'
+  Exec 'cmd /c ping -n 6 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 16 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 31 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 61 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE"'
 SectionEnd
 
 Section "Uninstall"
@@ -230,6 +236,7 @@ Section "Uninstall"
   Delete "$INSTDIR\rdassistant.exe"
   Delete "$INSTDIR\sciter.dll"
   Delete /REBOOTOK "$INSTDIR\sciter.dll"
+  Delete "$INSTDIR\installer_to_delete.txt"
   Delete "$INSTDIR\uninst.exe"
 
   ; 删除快捷方式（含旧版本遗留）
