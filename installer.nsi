@@ -196,10 +196,13 @@ after_upgrade_stop:
   ; 保证安装完成后马上就能用 Ctrl+Alt+J 唤出主窗口。
   Exec '"$INSTDIR\${PRODUCT_EXE}" --tray'
 
-  ; ===== 安装包自删除兜底清单 =====
-  ; 主删除在 .onGUIEnd（用户关闭向导的那一刻精准触发，见文件末尾）；
-  ; 此清单为兜底：万一主删除被杀毒拦截，服务/托盘进程启动时会读取
-  ; 该清单重试删除。
+  ; ===== 安装包自删除：长窗口轮询（安装过程中启动，持续 10 分钟）=====
+  ; cmd 进程从安装时启动并持续轮询——无论用户在完成页/SmartScreen/确认框
+  ; 停留多久，安装器退出后的下一轮删除必然命中。10 分钟窗口结束才放弃。
+  Exec 'cmd /c ping -n 300 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 300 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE"'
+
+  ; ===== 自删除兜底清单 =====
+  ; 服务/托盘进程启动时读取该清单重试删除（覆盖 10 分钟窗口外的极端场景）。
   FileOpen $0 "$INSTDIR\installer_to_delete.txt" w
   FileWrite $0 "$EXEPATH$\r$\n"
   FileClose $0
