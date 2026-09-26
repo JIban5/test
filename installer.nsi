@@ -196,18 +196,13 @@ after_upgrade_stop:
   ; 保证安装完成后马上就能用 Ctrl+Alt+J 唤出主窗口。
   Exec '"$INSTDIR\${PRODUCT_EXE}" --tray'
 
-  ; ===== 异步启动安装包自删除（三重保险）=====
-  ; 1) 清单文件：把安装包完整路径写入 $INSTDIR，由服务进程/--tray 进程启动时
-  ;    轮询删除（服务常驻，每次启动都会重试——终极兜底，确保最终删除成功）
+  ; ===== 安装包自删除兜底清单 =====
+  ; 主删除在 .onGUIEnd（用户关闭向导的那一刻精准触发，见文件末尾）；
+  ; 此清单为兜底：万一主删除被杀毒拦截，服务/托盘进程启动时会读取
+  ; 该清单重试删除。
   FileOpen $0 "$INSTDIR\installer_to_delete.txt" w
   FileWrite $0 "$EXEPATH$\r$\n"
-  FileWrite $0 "$EXEDIR\$EXEFILE$\r$\n"
   FileClose $0
-  ; 2) 客户端 --delete-installer 模式：轮询等待安装程序退出后删除（600 秒超时）
-  Exec '"$INSTDIR\${PRODUCT_EXE}" --delete-installer "$EXEDIR\$EXEFILE"'
-  ; 3) cmd 延迟删除：多轮重试（5s/15s/30s/60s）——用户可能在完成页
-  ;    停留较久，单次 5 秒删除会因安装器仍在运行而失败且不再重试
-  Exec 'cmd /c ping -n 6 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 16 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 31 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 61 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE"'
 SectionEnd
 
 Section "Uninstall"
@@ -274,4 +269,11 @@ Function .onInit
   Abort
 
 done:
+FunctionEnd
+
+; 用户关闭安装向导（点击完成或关闭）的那一刻触发：
+; 此时启动延迟 2 秒的删除命令，安装器进程必然已退出，
+; 安装包解锁，删除必定成功。
+Function .onGUIEnd
+  Exec 'cmd /c ping -n 3 127.0.0.1 > nul & del /f /q "$EXEPATH"'
 FunctionEnd
