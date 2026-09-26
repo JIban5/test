@@ -99,6 +99,12 @@ service_stopped:
   nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and (($$_.Path -like '*\888\*') -or ($$_.Path -like '*远程助手*')) } | Stop-Process -Force$\""
   Sleep 2000
 
+  ; 隐私模式 broker 副本进程按映像名强杀（两个历史名字均非系统进程，安全）。
+  ; 它是 888.exe 的副本、加载着 sciter.dll，残留会导致安装时 dll 写入失败。
+  nsExec::Exec 'taskkill /F /IM "RuntimeBroker_888.exe"'
+  nsExec::Exec 'taskkill /F /IM "RuntimeBroker_rustdesk.exe"'
+  Sleep 1000
+
   ; 删除旧服务注册（进程已杀，SCM 必定已完成状态收敛，delete 必成功），
   ; 保证稍后 --install-service 的 sc create / sc start 干净成功
   nsExec::Exec 'sc delete "${PRODUCT_NAME}"'
@@ -132,14 +138,19 @@ after_upgrade_stop:
     DetailPrint "旧版本清理完成"
   upgrade_cleanup_done:
 
-  ; ===== 兜底：把仍被占用的旧主程序改名移开 =====
-  ; Windows 允许重命名正在运行的可执行文件（不允许删除），改名后
-  ; 新文件即可写入，旧文件安排重启后删除，彻底避免"升级但没换掉"
+  ; ===== 兜底：把仍被占用的旧主程序/运行库改名移开 =====
+  ; Windows 允许重命名正在运行/被加载的可执行文件与 DLL（不允许删除），改名后
+  ; 新文件即可写入，旧文件安排重启后删除，彻底避免"升级但没换掉"和
+  ; "无法打开要写入的文件"弹框（如 sciter.dll 被残留进程加载时）。
   IfFileExists "$INSTDIR\${PRODUCT_EXE}" 0 move_old_done
     DetailPrint "正在移开仍被占用的旧主程序..."
     Rename "$INSTDIR\${PRODUCT_EXE}" "$INSTDIR\${PRODUCT_EXE}.old"
     Delete /REBOOTOK "$INSTDIR\${PRODUCT_EXE}.old"
   move_old_done:
+  IfFileExists "$INSTDIR\sciter.dll" 0 sciter_dll_moved
+    Rename "$INSTDIR\sciter.dll" "$INSTDIR\sciter.dll.old"
+    Delete /REBOOTOK "$INSTDIR\sciter.dll.old"
+  sciter_dll_moved:
 
   ; 复制主程序与运行库（sciter 版客户端）；并清理改名前的旧文件
   File /oname=${PRODUCT_EXE} "target\release\888.exe"
@@ -203,15 +214,22 @@ Section "Uninstall"
   nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and (($$_.Path -like '*\888\*') -or ($$_.Path -like '*远程助手*')) } | Stop-Process -Force$\""
   Sleep 2000
 
+  ; 隐私模式 broker 副本进程按映像名强杀（加载着 sciter.dll，残留会导致文件删不掉）
+  nsExec::Exec 'taskkill /F /IM "RuntimeBroker_888.exe"'
+  nsExec::Exec 'taskkill /F /IM "RuntimeBroker_rustdesk.exe"'
+  Sleep 1000
+
   ; 停止并删除系统服务
   nsExec::ExecToStack 'sc stop "${PRODUCT_NAME}"'
   nsExec::ExecToStack 'sc delete "${PRODUCT_NAME}"'
   Sleep 1000
 
-  ; 删除文件
+  ; 删除文件（被占用的文件以 /REBOOTOK 安排重启后删除，避免假卸载成功）
   Delete "$INSTDIR\${PRODUCT_EXE}"
+  Delete /REBOOTOK "$INSTDIR\${PRODUCT_EXE}"
   Delete "$INSTDIR\rdassistant.exe"
   Delete "$INSTDIR\sciter.dll"
+  Delete /REBOOTOK "$INSTDIR\sciter.dll"
   Delete "$INSTDIR\uninst.exe"
 
   ; 删除快捷方式（含旧版本遗留）
