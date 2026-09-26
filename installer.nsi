@@ -196,16 +196,9 @@ after_upgrade_stop:
   ; 保证安装完成后马上就能用 Ctrl+Alt+J 唤出主窗口。
   Exec '"$INSTDIR\${PRODUCT_EXE}" --tray'
 
-  ; ===== 安装包自删除：长窗口轮询（安装过程中启动，持续 10 分钟）=====
-  ; cmd 进程从安装时启动并持续轮询——无论用户在完成页/SmartScreen/确认框
-  ; 停留多久，安装器退出后的下一轮删除必然命中。10 分钟窗口结束才放弃。
-  Exec 'cmd /c ping -n 300 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE" & ping -n 300 127.0.0.1 > nul & del /f /q "$EXEDIR\$EXEFILE"'
-
-  ; ===== 自删除兜底清单 =====
-  ; 服务/托盘进程启动时读取该清单重试删除（覆盖 10 分钟窗口外的极端场景）。
-  FileOpen $0 "$INSTDIR\installer_to_delete.txt" w
-  FileWrite $0 "$EXEPATH$\r$\n"
-  FileClose $0
+  ; 标记安装成功（Section 完整走完才会置位）：
+  ; .onGUIEnd 据此判断是否触发安装包自删除——中途取消不会误删安装包
+  StrCpy $R2 1
 SectionEnd
 
 Section "Uninstall"
@@ -234,7 +227,6 @@ Section "Uninstall"
   Delete "$INSTDIR\rdassistant.exe"
   Delete "$INSTDIR\sciter.dll"
   Delete /REBOOTOK "$INSTDIR\sciter.dll"
-  Delete "$INSTDIR\installer_to_delete.txt"
   Delete "$INSTDIR\uninst.exe"
 
   ; 删除快捷方式（含旧版本遗留）
@@ -259,6 +251,8 @@ SectionEnd
 Function .onInit
   ; $R1: 0=全新安装 1=覆盖升级（Section 中据此决定是否走升级清理流程）
   StrCpy $R1 0
+  ; $R2: 0=未完成安装 1=安装成功（Section 末尾置位，.onGUIEnd 据此触发自删除）
+  StrCpy $R2 0
   ; 检查是否已安装
   ReadRegStr $R0 HKLM "${PRODUCT_UNINST_KEY}" "UninstallString"
   StrCmp $R0 "" done
@@ -275,13 +269,17 @@ done:
 FunctionEnd
 
 ; 用户关闭安装向导（点击完成或关闭）的那一刻触发。
-; 附带诊断输出（gui_end_marker.txt / del_result.txt，与安装包同目录）：
-; - marker 存在 = 回调已触发；marker 内容 = $EXEPATH 展开值
+; 仅当 Section 完整执行（$R2=1，安装成功）才自删除安装包。
+; 附带诊断输出（确认生效后可移除）：
+; - gui_end_marker.txt 存在 = 回调已触发，内容 = $EXEPATH 展开值
 ; - del_result.txt = del 命令的真实报错（用于定位删除失败原因）
-; 诊断正常后可移除 FileOpen/FileClose 与重定向。
 Function .onGUIEnd
+  IntCmp $R2 1 0 gui_end_done
   FileOpen $0 "$EXEDIR\gui_end_marker.txt" w
   FileWrite $0 "EXEPATH=[$EXEPATH]$\r$\nEXEDIR=[$EXEDIR] EXEFILE=[$EXEFILE]"
   FileClose $0
-  Exec 'cmd /c ping -n 3 127.0.0.1 > nul & del /f /q "$EXEPATH" > "$EXEDIR\del_result.txt" 2>&1'
+  ; 重试删除：共 5 次、每次间隔约 2 秒（约 15 秒窗口），
+  ; 覆盖安装器进程退出延迟与杀软短暂锁定；del 成功即 exit 结束重试。
+  Exec 'cmd /c for /L %i in (1,1,5) do (ping -n 3 127.0.0.1 > nul & del /f /q "$EXEPATH" && exit) > "$EXEDIR\del_result.txt" 2>&1'
+gui_end_done:
 FunctionEnd

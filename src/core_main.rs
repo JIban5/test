@@ -27,60 +27,6 @@ macro_rules! my_println{
 /// [Note]
 /// If it returns [`None`], then the process will terminate, and flutter gui will not be started.
 /// If it returns [`Some`], then the process will continue, and flutter gui will be started.
-/// 清理升级时记录的安装包（清单文件 installer_to_delete.txt 由 NSIS 安装器写入）。
-///
-/// 在被控服务进程与 --tray 进程启动时调用（独立线程轮询重试）：
-/// 安装包在用户点击"完成"（安装器退出）前被自身锁定，无法立即删除，
-/// 因此采用"最长 10 分钟、每 30 秒重试"的轮询；即使本次超时放弃，
-/// 下次服务重启/开机时清单仍在，会再次尝试——机制自愈，确保最终删除。
-fn cleanup_pending_installers() {
-    std::thread::spawn(|| {
-        let Ok(exe) = std::env::current_exe() else {
-            return;
-        };
-        let Some(dir) = exe.parent() else {
-            return;
-        };
-        let list_file = dir.join("installer_to_delete.txt");
-        let Ok(list) = std::fs::read_to_string(&list_file) else {
-            return; // 无清单：非升级安装或已清理
-        };
-        let paths: Vec<String> = list
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect();
-        if paths.is_empty() {
-            let _ = std::fs::remove_file(&list_file);
-            return;
-        }
-        log::info!("发现待删除安装包清单: {:?}", paths);
-        // 重试 20 次 × 30 秒 = 10 分钟，覆盖安装器退出与杀毒扫描释放文件的窗口
-        for _ in 0..20 {
-            let mut remaining = false;
-            for p in &paths {
-                match std::fs::remove_file(p) {
-                    Ok(_) => {
-                        log::info!("已删除安装包: {}", p);
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(e) => {
-                        remaining = true;
-                        log::info!("删除安装包失败（稍后重试）: {} - {}", p, e);
-                    }
-                }
-            }
-            if !remaining {
-                let _ = std::fs::remove_file(&list_file);
-                log::info!("待删除安装包全部清理完成");
-                return;
-            }
-            std::thread::sleep(std::time::Duration::from_secs(30));
-        }
-        log::warn!("待删除安装包清理超时，放弃（下次服务启动时将再次尝试）");
-    });
-}
-
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn core_main() -> Option<Vec<String>> {
     if !crate::common::global_init() {
@@ -107,16 +53,8 @@ pub fn core_main() -> Option<Vec<String>> {
     // 注意：这里曾误设 "hide_cm" 选项——实际生效的开关是 "allow-hide-cm"
     // 且需 approve-mode=password + 固定密码，对定制版免密模式永远不成立。
     hbb_common::config::Config::set_option("allow-hide-cm".into(), "Y".into());
-    // 工具模式（--delete-installer 删除安装包）：只做删除一件事，
-    // 跳过心跳与热键——热键被它注册后会持有整个轮询期（最长 600 秒），
-    // 导致升级场景中新 --tray 进程注册热键失败（快捷键失效的隐藏根因）。
-    let is_utility_mode = std::env::args()
-        .skip(1)
-        .any(|a| a == "--delete-installer");
     // 启动心跳线程：每 60 秒向管理后台上报在线状态
-    if !is_utility_mode {
-        crate::heartbeat::start();
-    }
+    crate::heartbeat::start();
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
     // 也会被创建为隐藏（表现为"运行后不打开主界面"）。
     // 隐藏逻辑只应在 --tray 后台模式下生效，见下方 --tray 分支。
@@ -146,8 +84,6 @@ pub fn core_main() -> Option<Vec<String>> {
             .any(|a| a == "--service");
         if is_service_mode {
             log::info!("服务模式跳过全局热键注册（由用户会话进程负责）");
-        } else if is_utility_mode {
-            log::info!("工具模式跳过全局热键注册（避免抢占 --tray 的热键注册）");
         } else {
             // 注册 + 消息泵在 listener 线程内闭环（见 tray_service::start_hotkey_listener），
             // 不依赖调用线程的消息循环，--tray/主窗口/其他进程均可安全调用
@@ -498,31 +434,6 @@ pub fn core_main() -> Option<Vec<String>> {
                 std::fs::remove_file(&args[1]).ok();
                 return None;
             }
-        } else if args[0] == "--delete-installer" {
-            // 升级安装：等待安装程序退出后自动删除安装包。
-            // 安装包 exe 运行期间被系统锁定无法删除，故由安装程序在结束前
-            // 异步启动本模式轮询重试，直至删除成功（或超时放弃）。
-            log::info!("start --delete-installer");
-            if args.len() == 2 && !args[1].is_empty() {
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
-                loop {
-                    match std::fs::remove_file(&args[1]) {
-                        Ok(_) => {
-                            log::info!("安装包已删除: {}", args[1]);
-                            break;
-                        }
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
-                        Err(_) => {
-                            if std::time::Instant::now() >= deadline {
-                                log::warn!("删除安装包超时，放弃: {}", args[1]);
-                                break;
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(500));
-                        }
-                    }
-                }
-            }
-            return None;
         } else if args[0] == "--tray" {
             // 单实例用命名互斥锁而非 check_process：check_process 依赖 sysinfo
             // 的 cmd() 参数解析，存在误判/漏判风险；互斥锁随进程退出自动释放，
@@ -547,7 +458,6 @@ pub fn core_main() -> Option<Vec<String>> {
                     // 热键的注册与消息泵已闭环在 listener 线程内
                     // （见 tray_service::start_hotkey_listener），
                     // 主线程 sleep 常驻即可，不参与消息处理。
-                    cleanup_pending_installers();
                     loop {
                         std::thread::sleep(std::time::Duration::from_secs(3600));
                     }
@@ -564,7 +474,6 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--service" {
             log::info!("start --service");
-            cleanup_pending_installers();
             crate::start_os_service();
             return None;
         } else if args[0] == "--server" {
