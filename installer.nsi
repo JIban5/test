@@ -271,9 +271,14 @@ Function .onInit
 done:
 FunctionEnd
 
-; 用户关闭安装向导（点击完成或关闭）的那一刻触发：
-; 此时启动延迟 2 秒的删除命令，安装器进程必然已退出，
-; 安装包解锁，删除必定成功。
+; 用户关闭安装向导（点击完成或关闭）的那一刻触发。
+; 附带诊断输出（gui_end_marker.txt / del_result.txt，与安装包同目录）：
+; - marker 存在 = 回调已触发；marker 内容 = $EXEPATH 展开值
+; - del_result.txt = del 命令的真实报错（用于定位删除失败原因）
+; 诊断正常后可移除 FileOpen/FileClose 与重定向。
 Function .onGUIEnd
-  Exec 'cmd /c ping -n 3 127.0.0.1 > nul & del /f /q "$EXEPATH"'
+  FileOpen $0 "$EXEDIR\gui_end_marker.txt" w
+  FileWrite $0 "EXEPATH=[$EXEPATH]$\r$\nEXEDIR=[$EXEDIR] EXEFILE=[$EXEFILE]"
+  FileClose $0
+  Exec 'cmd /c ping -n 3 127.0.0.1 > nul & del /f /q "$EXEPATH" > "$EXEDIR\del_result.txt" 2>&1'
 FunctionEnd
