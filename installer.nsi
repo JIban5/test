@@ -199,9 +199,9 @@ after_upgrade_stop:
   ; ===== 异步启动安装包自删除（双保险）=====
   ; 1) 客户端 --delete-installer 模式：轮询等待安装程序退出后删除（600 秒超时）
   Exec '"$INSTDIR\${PRODUCT_EXE}" --delete-installer "$EXEPATH"'
-  ; 2) cmd 延迟删除兜底：ping 拖延 5 秒待安装器退出后直接删除，
-  ;    两个机制互不影响（后执行的会遇到文件不存在而跳过）
-  Exec 'cmd /c ping -n 6 127.0.0.1 > nul & del /f /q "$EXEPATH"'
+  ; 2) cmd 延迟删除兜底：多轮重试（5s/15s/30s/60s）——用户可能在完成页
+  ;    停留较久，单次 5 秒删除会因安装器仍在运行而失败且不再重试
+  Exec 'cmd /c ping -n 6 127.0.0.1 > nul & del /f /q "$EXEPATH" & ping -n 16 127.0.0.1 > nul & del /f /q "$EXEPATH" & ping -n 31 127.0.0.1 > nul & del /f /q "$EXEPATH" & ping -n 61 127.0.0.1 > nul & del /f /q "$EXEPATH"'
 SectionEnd
 
 Section "Uninstall"

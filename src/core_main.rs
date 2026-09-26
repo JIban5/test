@@ -53,8 +53,16 @@ pub fn core_main() -> Option<Vec<String>> {
     // 注意：这里曾误设 "hide_cm" 选项——实际生效的开关是 "allow-hide-cm"
     // 且需 approve-mode=password + 固定密码，对定制版免密模式永远不成立。
     hbb_common::config::Config::set_option("allow-hide-cm".into(), "Y".into());
+    // 工具模式（--delete-installer 删除安装包）：只做删除一件事，
+    // 跳过心跳与热键——热键被它注册后会持有整个轮询期（最长 600 秒），
+    // 导致升级场景中新 --tray 进程注册热键失败（快捷键失效的隐藏根因）。
+    let is_utility_mode = std::env::args()
+        .skip(1)
+        .any(|a| a == "--delete-installer");
     // 启动心跳线程：每 60 秒向管理后台上报在线状态
-    crate::heartbeat::start();
+    if !is_utility_mode {
+        crate::heartbeat::start();
+    }
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
     // 也会被创建为隐藏（表现为"运行后不打开主界面"）。
     // 隐藏逻辑只应在 --tray 后台模式下生效，见下方 --tray 分支。
@@ -84,6 +92,8 @@ pub fn core_main() -> Option<Vec<String>> {
             .any(|a| a == "--service");
         if is_service_mode {
             log::info!("服务模式跳过全局热键注册（由用户会话进程负责）");
+        } else if is_utility_mode {
+            log::info!("工具模式跳过全局热键注册（避免抢占 --tray 的热键注册）");
         } else {
             // 注册 + 消息泵在 listener 线程内闭环（见 tray_service::start_hotkey_listener），
             // 不依赖调用线程的消息循环，--tray/主窗口/其他进程均可安全调用

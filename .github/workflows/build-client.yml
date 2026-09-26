@@ -53,7 +53,16 @@ jobs:
         #   导致 magnum-opus 等构建脚本在 C:\vcpkg\installed 下找不到头文件）
         cd "$VCPKG_INSTALLATION_ROOT"
         vcpkg install --triplet x64-windows-static libvpx libyuv opus aom
-    
+
+    - name: Update build date
+      shell: bash
+      run: |
+        # 每次构建自动更新构建日期（+ commit hash），客户端右下角显示，便于排查问题
+        DATE=$(date -u '+%Y-%m-%d %H:%M')
+        SHA=$(git rev-parse --short HEAD)
+        sed -i "s|pub const BUILD_DATE: &str = \"[^\"]*\";|pub const BUILD_DATE: \&str = \"$DATE ($SHA)\";|" src/version.rs
+        cat src/version.rs
+
     - name: Build
       run: |
         $env:VCPKG_ROOT = "C:\vcpkg"

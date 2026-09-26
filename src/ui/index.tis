@@ -794,6 +794,7 @@ class App: Reactor.Component
                     </div>
                     {!outgoing_only ? <ConnectStatus @{this.connect_status} /> : ""}
                 </div>}
+                <div style="position:absolute; right:10px; bottom:6px; font-size:0.72em; opacity:0.6; z-index:1;">v{handler.get_version()} · {handler.get_build_date()}</div>
                 <div #overlay style="position: absolute;size:*;background:black;opacity:0.5;display:none" />
             </div>; 
     }
