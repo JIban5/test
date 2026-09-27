@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.16"
+!define PRODUCT_VERSION "1.4.9.17"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.16.0"
+VIProductVersion "1.4.9.17.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.16"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.16"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.17"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.17"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -41,11 +41,16 @@ VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !macroend
 
 ; ===== 自删除调试日志（验证用，验证通过后移除）=====
-; 安装器与应用侧共同追加写 %APPDATA%\888\delself.log，串联完整执行轨迹。
-; 打开/写入失败静默跳过，绝不阻塞安装流程。
+; 双路径追加写：安装包同目录（最直观，提权差异下也一定看得到）+
+; %APPDATA%\888\（兜底）。打开/写入失败静默跳过，绝不阻塞安装流程。
 ; 注意：不用 ${__LINE__} 造标签（其值含点号，非法标签名导致编译失败），
 ; 宏体内指令序列固定，相对跳转 +3 恒指向宏结束后的下一条指令。
 !macro APPLOG TEXT
+  ClearErrors
+  FileOpen $0 "$EXEDIR\delself.log" a
+  IfErrors +3
+  FileWrite $0 "${TEXT}$\r$\n"
+  FileClose $0
   CreateDirectory "$APPDATA\888"
   ClearErrors
   FileOpen $0 "$APPDATA\888\delself.log" a

@@ -171,6 +171,22 @@ pub fn minimize_to_tray() {
     }
 }
 
+/// 追加一行自删除调试日志（验证用，验证通过后移除）。
+/// 独立于 log 框架：无论日志初始化状态如何都必定落盘；失败静默跳过。
+fn append_selflog(dir: &std::path::Path, msg: &str) {
+    let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    use std::io::Write;
+    if std::fs::create_dir_all(dir).is_ok() {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("delself.log"))
+        {
+            let _ = writeln!(f, "[app] ({}) {}", ts, msg);
+        }
+    }
+}
+
 /// 安装包自删除兜底（应用侧，时机确定性远高于安装器侧的 cmd 延迟删除）：
 /// 安装器安装成功后把安装包完整路径写入 HKCU\Software\888\DeleteInstallerPath，
 /// 由 --tray 获锁常驻进程在本函数的后台线程里处理：
@@ -185,31 +201,27 @@ pub fn delete_pending_installer_async() {
         use winreg::enums::*;
         use winreg::RegKey;
 
-        // ===== 调试日志（验证自删除用，验证通过后移除）=====
-        // 独立于 log 框架：无论日志初始化状态如何都必定落盘，
-        // 与安装器侧追加写同一文件 %APPDATA%\888\delself.log
-        let dbg = |msg: &str| {
-            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-            if let Some(appdata) = std::env::var_os("APPDATA") {
-                let dir = std::path::PathBuf::from(appdata).join("888");
-                if std::fs::create_dir_all(&dir).is_ok() {
-                    use std::io::Write;
-                    if let Ok(mut f) = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(dir.join("delself.log"))
-                    {
-                        let _ = writeln!(f, "[app] ({}) {}", ts, msg);
-                    }
-                }
+        // 调试日志双路径：本账户 %APPDATA%\888\（固定可写）+
+        // 安装包同目录（读到记录后设置；提权账户差异下用户看得到）
+        let appdata_dir = std::env::var_os("APPDATA").map(|p| std::path::PathBuf::from(p).join("888"));
+        let pkg_dir: Option<std::path::PathBuf> = None;
+        let dbg = |msg: &str, pkg_dir: &Option<std::path::PathBuf>| {
+            if let Some(d) = appdata_dir.as_deref() {
+                append_selflog(d, msg);
+            }
+            if let Some(d) = pkg_dir.as_deref() {
+                append_selflog(d, msg);
             }
         };
 
-        dbg(&format!(
-            "task started, exe={:?}, pid={}",
-            std::env::current_exe(),
-            std::process::id()
-        ));
+        dbg(
+            &format!(
+                "task started, exe={:?}, pid={}",
+                std::env::current_exe(),
+                std::process::id()
+            ),
+            &pkg_dir,
+        );
 
         const SUBKEY: &str = r"Software\888";
         const VALUE_NAME: &str = "DeleteInstallerPath";
@@ -219,45 +231,50 @@ pub fn delete_pending_installer_async() {
         let installer_path: String = match hkcu.open_subkey(SUBKEY) {
             Ok(key) => match key.get_value::<String, _>(VALUE_NAME) {
                 Ok(path) => {
-                    dbg(&format!("registry read OK: {}", path));
+                    dbg(&format!("registry read OK: {}", path), &pkg_dir);
                     path
                 }
                 Err(e) => {
-                    dbg(&format!("registry value read FAILED: {} -> skip", e));
+                    dbg(&format!("registry value read FAILED: {} -> skip", e), &pkg_dir);
                     log::info!("未读取到安装包路径记录，跳过自删除");
                     return;
                 }
             },
             Err(e) => {
-                dbg(&format!("registry key open FAILED: {} -> skip", e));
+                dbg(&format!("registry key open FAILED: {} -> skip", e), &pkg_dir);
                 log::info!("未读取到安装包路径记录，跳过自删除");
                 return;
             }
         };
 
+        // 读到安装包路径后，日志同步写安装包同目录
+        let pkg_dir = std::path::Path::new(&installer_path)
+            .parent()
+            .map(|p| p.to_path_buf());
+
         // 先等安装器进程退出（毫秒级）+ 杀软对新生 exe 的扫描锁定窗口（数秒）；
         // 本进程常驻，延迟删除不影响热键/主窗口等功能
-        dbg("waiting 30s for installer exit / av unlock");
+        dbg("waiting 30s for installer exit / av unlock", &pkg_dir);
         std::thread::sleep(std::time::Duration::from_secs(30));
 
         let mut done = false;
         for attempt in 1..=10 {
             match std::fs::remove_file(&installer_path) {
                 Ok(_) => {
-                    dbg(&format!("attempt {}: DELETED", attempt));
+                    dbg(&format!("attempt {}: DELETED", attempt), &pkg_dir);
                     log::info!("安装包已删除: {}", installer_path);
                     done = true;
                     break;
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     // 文件不存在：跳过即可，视为处理完成
-                    dbg("file not found -> skip");
+                    dbg("file not found -> skip", &pkg_dir);
                     log::info!("安装包已不存在，无需删除: {}", installer_path);
                     done = true;
                     break;
                 }
                 Err(e) => {
-                    dbg(&format!("attempt {}: busy ({})", attempt, e));
+                    dbg(&format!("attempt {}: busy ({})", attempt, e), &pkg_dir);
                     log::info!("安装包暂时无法删除（第 {} 次）: {}，稍后重试", attempt, e);
                     std::thread::sleep(std::time::Duration::from_secs(6));
                 }
@@ -271,9 +288,9 @@ pub fn delete_pending_installer_async() {
                 Ok(key) => key.delete_value(VALUE_NAME).is_ok(),
                 Err(_) => false,
             };
-            dbg(&format!("done, record cleared: {}", cleared));
+            dbg(&format!("done, record cleared: {}", cleared), &pkg_dir);
         } else {
-            dbg("all attempts busy, record kept for next start");
+            dbg("all attempts busy, record kept for next start", &pkg_dir);
         }
     });
 }
