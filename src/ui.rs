@@ -292,6 +292,18 @@ impl UI {
         }
     }
 
+    // 主界面"诊断日志"按钮：立即尝试一次安装包删除并返回完整日志文本
+    fn run_delself_and_get_log(&mut self) -> String {
+        #[cfg(windows)]
+        {
+            crate::tray_service::run_delself_once_and_collect_log()
+        }
+        #[cfg(not(windows))]
+        {
+            String::new()
+        }
+    }
+
     fn install_me(&mut self, _options: String, _path: String) {
         install_me(_options, _path, false, false);
     }
@@ -829,6 +841,7 @@ impl sciter::EventHandler for UI {
         fn install_options();
         fn goto_install();
         fn uninstall_me();
+        fn run_delself_and_get_log();
         fn is_process_trusted(bool);
         fn is_can_screen_recording(bool);
         fn is_installed_daemon(bool);

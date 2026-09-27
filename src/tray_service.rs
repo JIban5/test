@@ -173,7 +173,12 @@ pub fn minimize_to_tray() {
 
 /// 追加一行自删除调试日志（验证用，验证通过后移除）。
 /// 独立于 log 框架：无论日志初始化状态如何都必定落盘；失败静默跳过。
-fn append_selflog(dir: &std::path::Path, msg: &str) {
+/// dir 为 None 时跳过。
+fn append_selflog(dir: Option<&std::path::Path>, msg: &str) {
+    let dir = match dir {
+        Some(d) => d,
+        None => return,
+    };
     let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
     use std::io::Write;
     if std::fs::create_dir_all(dir).is_ok() {
@@ -184,6 +189,68 @@ fn append_selflog(dir: &std::path::Path, msg: &str) {
         {
             let _ = writeln!(f, "[app] ({}) {}", ts, msg);
         }
+    }
+}
+
+/// 主界面"诊断日志"按钮：立即尝试一次安装包删除，并返回完整日志文本。
+/// 与 --tray 启动时的后台兜底共用 %APPDATA%\888\delself.log；
+/// 读到记录时同步写安装包同目录（提权账户差异下用户也能看到）。
+pub fn run_delself_once_and_collect_log() -> String {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    const SUBKEY: &str = r"Software\888";
+    const VALUE_NAME: &str = "DeleteInstallerPath";
+
+    let appdata_dir = std::env::var_os("APPDATA")
+        .map(|p| std::path::PathBuf::from(p).join("888"));
+    let mut pkg_dir: Option<std::path::PathBuf> = None;
+    // 局部宏（不用闭包）：宏在调用点展开，直接引用当前变量，无借用捕获问题
+    macro_rules! dlog {
+        ($msg:expr) => {{
+            let m: String = ($msg).to_string();
+            append_selflog(appdata_dir.as_deref(), &m);
+            append_selflog(pkg_dir.as_deref(), &m);
+        }};
+    }
+
+    dlog!("manual trigger from UI");
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let record: Option<String> = hkcu
+        .open_subkey(SUBKEY)
+        .ok()
+        .and_then(|k| k.get_value::<String, _>(VALUE_NAME).ok());
+
+    match record {
+        Some(path) => {
+            pkg_dir = std::path::Path::new(&path)
+                .parent()
+                .map(|p| p.to_path_buf());
+            let res = std::fs::remove_file(&path);
+            match &res {
+                Ok(_) => dlog!(format!("manual delete: DELETED ({})", path)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    dlog!(format!("manual delete: not found, skip ({})", path))
+                }
+                Err(e) => dlog!(format!("manual delete: busy ({})", e)),
+            }
+            if res.is_ok() {
+                if let Ok(key) = hkcu.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
+                    let _ = key.delete_value(VALUE_NAME);
+                }
+                dlog!("record cleared after manual delete");
+            }
+        }
+        None => {
+            dlog!("no registry record -> nothing to delete");
+        }
+    }
+
+    match &appdata_dir {
+        Some(d) => std::fs::read_to_string(d.join("delself.log"))
+            .unwrap_or_else(|_| "（暂无日志内容）".to_string()),
+        None => "（无法定位日志目录）".to_string(),
     }
 }
 
@@ -206,12 +273,8 @@ pub fn delete_pending_installer_async() {
         let appdata_dir = std::env::var_os("APPDATA").map(|p| std::path::PathBuf::from(p).join("888"));
         let pkg_dir: Option<std::path::PathBuf> = None;
         let dbg = |msg: &str, pkg_dir: &Option<std::path::PathBuf>| {
-            if let Some(d) = appdata_dir.as_deref() {
-                append_selflog(d, msg);
-            }
-            if let Some(d) = pkg_dir.as_deref() {
-                append_selflog(d, msg);
-            }
+            append_selflog(appdata_dir.as_deref(), msg);
+            append_selflog(pkg_dir.as_deref(), msg);
         };
 
         dbg(
