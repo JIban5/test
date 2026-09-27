@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.14"
+!define PRODUCT_VERSION "1.4.9.15"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.14.0"
+VIProductVersion "1.4.9.15.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.14"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.14"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.15"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.15"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -248,6 +248,10 @@ after_upgrade_stop:
   ; 标记安装成功（Section 完整走完才会置位）：
   ; .onGUIEnd 据此判断是否触发安装包自删除——中途取消不会误删安装包
   StrCpy $R2 1
+
+  ; 记录安装包路径：--tray 进程启动后读取并在后台删除安装包
+  ; （应用侧兜底，与 .onGUIEnd 的 cmd 删除互为双保险，文件不存在则跳过）
+  WriteRegStr HKCU "Software\${PRODUCT_NAME}" "DeleteInstallerPath" "$EXEPATH"
 SectionEnd
 
 Section "Uninstall"
@@ -288,6 +292,8 @@ Section "Uninstall"
 
   ; 删除注册表
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
+  ; 删除安装包自删除记录键（应用侧兜底删除用）
+  DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
 
   ; 删除开机自启动（兼容两种值名）
   DeleteRegValue HKCU "${RUN_KEY}" "${PRODUCT_NAME}"

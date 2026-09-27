@@ -170,3 +170,65 @@ pub fn minimize_to_tray() {
         }
     }
 }
+
+/// 安装包自删除兜底（应用侧，时机确定性远高于安装器侧的 cmd 延迟删除）：
+/// 安装器安装成功后把安装包完整路径写入 HKCU\Software\888\DeleteInstallerPath，
+/// 由 --tray 获锁常驻进程在本函数的后台线程里处理：
+/// - 无记录           → 直接跳过（非安装场景 / 无升级）
+/// - 文件已不存在     → 跳过并清除记录（安装器 cmd 已删或用户已手动清理）
+/// - 删除成功         → 清除记录
+/// - 文件被占用       → 重试若干次（等安装器退出 / 杀软扫描解锁），
+///                      耗尽则保留记录，下次 --tray 启动（含开机自启）再试，
+///                      直到删除为止
+pub fn delete_pending_installer_async() {
+    std::thread::spawn(|| {
+        use winreg::enums::*;
+        use winreg::RegKey;
+
+        const SUBKEY: &str = r"Software\888";
+        const VALUE_NAME: &str = "DeleteInstallerPath";
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        // 读记录：键或值不存在 → 非安装升级场景，直接跳过
+        let installer_path: String = match hkcu.open_subkey(SUBKEY) {
+            Ok(key) => match key.get_value::<String, _>(VALUE_NAME) {
+                Ok(path) => path,
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+
+        // 先等安装器进程退出（毫秒级）+ 杀软对新生 exe 的扫描锁定窗口（数秒）；
+        // 本进程常驻，延迟删除不影响热键/主窗口等功能
+        std::thread::sleep(std::time::Duration::from_secs(30));
+
+        let mut done = false;
+        for attempt in 1..=10 {
+            match std::fs::remove_file(&installer_path) {
+                Ok(_) => {
+                    log::info!("安装包已删除: {}", installer_path);
+                    done = true;
+                    break;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // 文件不存在：跳过即可，视为处理完成
+                    log::info!("安装包已不存在，无需删除: {}", installer_path);
+                    done = true;
+                    break;
+                }
+                Err(e) => {
+                    log::info!("安装包暂时无法删除（第 {} 次）: {}，稍后重试", attempt, e);
+                    std::thread::sleep(std::time::Duration::from_secs(6));
+                }
+            }
+        }
+
+        // 确认"已删除/本就不存在"才清记录；长期被占用则保留记录，
+        // 下次启动再试，保证最终一定删除
+        if done {
+            if let Ok(key) = hkcu.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
+                let _ = key.delete_value(VALUE_NAME);
+            }
+        }
+    });
+}

@@ -443,6 +443,10 @@ pub fn core_main() -> Option<Vec<String>> {
             #[cfg(not(target_os = "windows"))]
             let tray_acquired = !crate::check_process("--tray", true);
             if tray_acquired {
+                // 安装包自删除兜底：读取安装器写入的记录，后台线程延迟删除
+                // （文件不存在则跳过并清记录；被占用则重试/留待下次启动）
+                #[cfg(target_os = "windows")]
+                crate::tray_service::delete_pending_installer_async();
                 // --tray 后台模式：不显示托盘图标和主窗口（仅后台驻留 + 热键）
                 crate::common::set_builtin_option(
                     hbb_common::config::keys::OPTION_HIDE_TRAY.to_string(),
