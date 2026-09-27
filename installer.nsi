@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.13"
+!define PRODUCT_VERSION "1.4.9.14"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.13.0"
+VIProductVersion "1.4.9.14.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.13"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.13"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.14"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.14"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -324,24 +324,21 @@ FunctionEnd
 Function .onGUIEnd
   IntCmp $R2 1 0 gui_end_done
 
-  ; cmd 参数含路径引号（路径可能带空格），System::Call 字符串字面量
-  ; 无法内嵌双引号，必须先组装进变量、以裸变量形式传入（变量值原样传递）
-  StrCpy $1 '/c del /f /q "$EXEDIR\gui_end_marker.txt" "$EXEDIR\del_result.txt" 2>nul'
-  StrCpy $2 '/c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)'
-
   ; 清理旧版本遗留的诊断文件（不存在时静默跳过）
-  System::Call 'shell32::ShellExecute(i 0, t "open", t "cmd.exe", t $1, t "$EXEDIR", i 0) i .r0'
+  ExecShell "open" "cmd.exe" '/c del /f /q "$EXEDIR\gui_end_marker.txt" "$EXEDIR\del_result.txt" 2>nul' SW_HIDE
 
-  ; 隐藏执行删除命令（SW_HIDE 无黑框；ShellExecute 异步返回、不阻塞安装器。
-  ; 注意：绝不能用会阻塞的 nsExec/ExecWait——安装器进程不退出，
-  ; 自身文件永远被占用，删除必然失败）。
+  ; 隐藏执行删除命令（内置 ExecShell 走 ShellExecuteEx：SW_HIDE 无黑框、
+  ; 异步返回不阻塞安装器。注意：绝不能用会阻塞的 nsExec/ExecWait——
+  ; 安装器进程不退出，自身文件永远被占用，删除必然失败）。
+  ; 不用 System::Call：其调用串解析会被参数值内的双引号截断而静默失败
+  ; （上一版无任何动静的根因），ExecShell 参数即普通 NSIS 字符串，无此坑。
   ; for /L 循环 60 次、每次 ping -n 2 延迟约 1 秒（约 60 秒窗口）：
   ; 首轮等待安装器进程退出（毫秒级），后续轮次覆盖杀软对新生 exe 的
   ; 实时扫描锁定（通常数秒）；del 失败静默继续下一轮，成功即 exit。
-  System::Call 'shell32::ShellExecute(i 0, t "open", t "cmd.exe", t $2, t "$EXEDIR", i 0) i .r0'
+  ExecShell "open" "cmd.exe" '/c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)' SW_HIDE
+  IfErrors 0 gui_end_done
 
-  ; ShellExecute 异常（返回值 <=32）时退回普通 Exec 兜底：可见黑框但保证能删
-  IntCmp $0 32 0 0 gui_end_done
+  ; ExecShell 异常时退回普通 Exec 兜底：可见黑框但保证能删
   Exec 'cmd /c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)'
 gui_end_done:
 FunctionEnd
