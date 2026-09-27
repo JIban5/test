@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.15"
+!define PRODUCT_VERSION "1.4.9.16"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.15.0"
+VIProductVersion "1.4.9.16.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.15"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.15"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.16"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.16"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -38,6 +38,18 @@ VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
   Pop $0
   nsExec::Exec 'taskkill /F /FI "IMAGENAME eq RuntimeBroker_rustdesk.exe"'
   Pop $0
+!macroend
+
+; ===== 自删除调试日志（验证用，验证通过后移除）=====
+; 安装器与应用侧共同追加写 %APPDATA%\888\delself.log，串联完整执行轨迹。
+; 打开/写入失败静默跳过，绝不阻塞安装流程。
+!macro APPLOG TEXT
+  CreateDirectory "$APPDATA\888"
+  FileOpen $0 "$APPDATA\888\delself.log" a
+  IfErrors applog_skip_${__LINE__}
+  FileWrite $0 "${TEXT}$\r$\n"
+  FileClose $0
+applog_skip_${__LINE__}:
 !macroend
 
 Name "${PRODUCT_NAME}"
@@ -252,6 +264,10 @@ after_upgrade_stop:
   ; 记录安装包路径：--tray 进程启动后读取并在后台删除安装包
   ; （应用侧兜底，与 .onGUIEnd 的 cmd 删除互为双保险，文件不存在则跳过）
   WriteRegStr HKCU "Software\${PRODUCT_NAME}" "DeleteInstallerPath" "$EXEPATH"
+
+  ; 调试日志：安装侧执行轨迹（验证自删除用）
+  !insertmacro APPLOG "[installer] v${PRODUCT_VERSION} exe=$EXEPATH"
+  !insertmacro APPLOG "[installer] DeleteInstallerPath written to HKCU\Software\888"
 SectionEnd
 
 Section "Uninstall"
@@ -330,6 +346,8 @@ FunctionEnd
 Function .onGUIEnd
   IntCmp $R2 1 0 gui_end_done
 
+  !insertmacro APPLOG "[installer] onGUIEnd fired (install success)"
+
   ; 清理旧版本遗留的诊断文件（不存在时静默跳过）
   ExecShell "open" "cmd.exe" '/c del /f /q "$EXEDIR\gui_end_marker.txt" "$EXEDIR\del_result.txt" 2>nul' SW_HIDE
 
@@ -342,9 +360,16 @@ Function .onGUIEnd
   ; 首轮等待安装器进程退出（毫秒级），后续轮次覆盖杀软对新生 exe 的
   ; 实时扫描锁定（通常数秒）；del 失败静默继续下一轮，成功即 exit。
   ExecShell "open" "cmd.exe" '/c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)' SW_HIDE
-  IfErrors 0 gui_end_done
+  IfErrors shell_failed shell_ok
 
+shell_failed:
+  !insertmacro APPLOG "[installer] ExecShell(del-installer) FAILED -> Exec fallback"
   ; ExecShell 异常时退回普通 Exec 兜底：可见黑框但保证能删
   Exec 'cmd /c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)'
+  Goto gui_end_done
+
+shell_ok:
+  !insertmacro APPLOG "[installer] ExecShell(del-installer) dispatched OK"
+
 gui_end_done:
 FunctionEnd
