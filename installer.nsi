@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.12"
+!define PRODUCT_VERSION "1.4.9.13"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.12.0"
+VIProductVersion "1.4.9.13.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.12"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.12"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.13"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.13"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -23,6 +23,22 @@ VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "LogicLib.nsh"
+
+; ===== 结束本产品残留进程的宏（taskkill 方案，不依赖 PowerShell）=====
+; 背景：机房组策略可能禁用/限制 PowerShell，按路径杀进程的命令会静默空转，
+; 残留进程占用 sciter.dll，安装时弹"无法打开要写入的文件"。
+; - 888.exe 同时是安装包自身的映像名：必须用 PID ne 排除安装器进程（否则自杀）
+; - RuntimeBroker_888.exe / RuntimeBroker_rustdesk.exe：隐私模式 broker
+;   副本（加载 sciter.dll），均为非系统进程，按映像名强杀安全
+!macro KILL888
+  System::Call 'kernel32::GetCurrentProcessId() i .r9'
+  nsExec::Exec 'taskkill /F /FI "IMAGENAME eq 888.exe" /FI "PID ne $9"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /FI "IMAGENAME eq RuntimeBroker_888.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /FI "IMAGENAME eq RuntimeBroker_rustdesk.exe"'
+  Pop $0
+!macroend
 
 Name "${PRODUCT_NAME}"
 OutFile "888.exe"
@@ -93,24 +109,27 @@ wait_service_stopped:
   IntCmp $1 5 0 wait_service_stopped
 service_stopped:
 
-  ; 结束所有残留进程（按完整路径过滤：安装目录(888)或旧版目录(远程助手)。
-  ; 注意：不能用 Get-Process 888 —— 纯数字会被 PowerShell 当作 PID 解析，
-  ; 导致查不到名为 888 的进程、旧程序杀不掉）
-  nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and (($$_.Path -like '*\888\*') -or ($$_.Path -like '*远程助手*')) } | Stop-Process -Force$\""
+  ; 结束所有残留进程（两轮强杀，间隔等待：第一轮后若有进程被
+  ; 服务恢复策略/守护逻辑重新拉起，第二轮兜底）。
+  ; 不再用 PowerShell 杀进程：机房组策略可能禁用/限制 PowerShell，
+  ; 导致命令静默空转、旧文件占用引发"无法打开要写入的文件"弹框。
+  !insertmacro KILL888
   Sleep 2000
-
-  ; 隐私模式 broker 副本进程按映像名强杀（两个历史名字均非系统进程，安全）。
-  ; 它是 888.exe 的副本、加载着 sciter.dll，残留会导致安装时 dll 写入失败。
-  nsExec::Exec 'taskkill /F /IM "RuntimeBroker_888.exe"'
-  nsExec::Exec 'taskkill /F /IM "RuntimeBroker_rustdesk.exe"'
+  !insertmacro KILL888
   Sleep 1000
 
   ; 删除旧服务注册（进程已杀，SCM 必定已完成状态收敛，delete 必成功），
   ; 保证稍后 --install-service 的 sc create / sc start 干净成功
   nsExec::Exec 'sc delete "${PRODUCT_NAME}"'
+  Pop $0
   Sleep 1000
 
 after_upgrade_stop:
+
+  ; 汇合点再杀一轮（全新/升级共用；此刻离写入最近，覆盖前两轮之后
+  ; 才被重新拉起的进程）。888.exe 映像名已排除安装器自身，安全。
+  !insertmacro KILL888
+  Sleep 500
 
   ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
   ; 旧版目录、程序名、自启动项与新版本完全不同，安装时需彻底清理，
@@ -118,8 +137,10 @@ after_upgrade_stop:
   StrCpy $R8 "C:\Program Files\远程助手"
   IfFileExists "$R8\svchost.exe" 0 upgrade_cleanup_done
     DetailPrint "检测到旧版本，正在升级清理..."
-    ; 结束旧版进程（按完整路径过滤，绝不误杀系统同名进程）
+    ; 结束旧版进程（按完整路径过滤，绝不误杀系统同名进程；
+    ; svchost 与系统进程同名，只能用 PowerShell 按路径过滤，不能 taskkill）
     nsExec::ExecToStack "powershell -NoProfile -Command $\"Get-Process svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$R8\svchost.exe' } | Stop-Process -Force$\""
+    Pop $0
     Sleep 1000
     ; 清除旧版自启动项
     DeleteRegValue HKCU "${RUN_KEY}" "远程助手"
@@ -142,19 +163,47 @@ after_upgrade_stop:
   ; Windows 允许重命名正在运行/被加载的可执行文件与 DLL（不允许删除），改名后
   ; 新文件即可写入，旧文件安排重启后删除，彻底避免"升级但没换掉"和
   ; "无法打开要写入的文件"弹框（如 sciter.dll 被残留进程加载时）。
+  ; Rename 前先清理上次升级遗留的 .old（处于挂起删除状态时无法被覆盖，
+  ; 会导致 Rename 失败）；Rename 失败时等 1 秒重试一次（覆盖杀软
+  ; 短暂独占打开文件的窗口期）。
   IfFileExists "$INSTDIR\${PRODUCT_EXE}" 0 move_old_done
     DetailPrint "正在移开仍被占用的旧主程序..."
+    Delete "$INSTDIR\${PRODUCT_EXE}.old"
     Rename "$INSTDIR\${PRODUCT_EXE}" "$INSTDIR\${PRODUCT_EXE}.old"
+    IfErrors 0 exe_old_moved
+      ClearErrors
+      Sleep 1000
+      Rename "$INSTDIR\${PRODUCT_EXE}" "$INSTDIR\${PRODUCT_EXE}.old"
+    exe_old_moved:
     Delete /REBOOTOK "$INSTDIR\${PRODUCT_EXE}.old"
   move_old_done:
   IfFileExists "$INSTDIR\sciter.dll" 0 sciter_dll_moved
+    Delete "$INSTDIR\sciter.dll.old"
     Rename "$INSTDIR\sciter.dll" "$INSTDIR\sciter.dll.old"
+    IfErrors 0 dll_old_moved
+      ClearErrors
+      Sleep 1000
+      Rename "$INSTDIR\sciter.dll" "$INSTDIR\sciter.dll.old"
+    dll_old_moved:
     Delete /REBOOTOK "$INSTDIR\sciter.dll.old"
   sciter_dll_moved:
 
-  ; 复制主程序与运行库（sciter 版客户端）；并清理改名前的旧文件
+  ; 复制主程序与运行库（sciter 版客户端）；并清理改名前的旧文件。
+  ; SetOverwrite try：极端情况下目标仍被锁定时不弹"无法打开要写入的文件"
+  ; 框（弹框会卡死全自动升级流程），保留旧文件继续安装——
+  ; 主防线是前面的两轮强杀 + Rename 兜底，正常到不了这一步。
+  SetOverwrite try
   File /oname=${PRODUCT_EXE} "target\release\888.exe"
+  IfErrors 0 exe_file_ok
+    DetailPrint "主程序仍被占用，保留旧文件，建议重启后再升级"
+  exe_file_ok:
+  ClearErrors
   File /oname=sciter.dll "target\release\sciter.dll"
+  IfErrors 0 dll_file_ok
+    DetailPrint "sciter.dll 仍被占用，保留旧文件，不影响本次升级"
+  dll_file_ok:
+  ClearErrors
+  SetOverwrite on
   Delete "$INSTDIR\rdassistant.exe"
 
   ; 不创建桌面快捷方式（需求：安装后桌面无图标）
@@ -218,7 +267,9 @@ Section "Uninstall"
 
   ; 停止并删除系统服务
   nsExec::ExecToStack 'sc stop "${PRODUCT_NAME}"'
+  Pop $0
   nsExec::ExecToStack 'sc delete "${PRODUCT_NAME}"'
+  Pop $0
   Sleep 1000
 
   ; 删除文件（被占用的文件以 /REBOOTOK 安排重启后删除，避免假卸载成功）
