@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.11"
+!define PRODUCT_VERSION "1.4.9.12"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.11.0"
+VIProductVersion "1.4.9.12.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.11"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.11"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.12"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.12"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -269,17 +269,28 @@ done:
 FunctionEnd
 
 ; 用户关闭安装向导（点击完成或关闭）的那一刻触发。
-; 仅当 Section 完整执行（$R2=1，安装成功）才自删除安装包。
-; 附带诊断输出（确认生效后可移除）：
-; - gui_end_marker.txt 存在 = 回调已触发，内容 = $EXEPATH 展开值
-; - del_result.txt = del 命令的真实报错（用于定位删除失败原因）
+; 仅当 Section 完整执行（$R2=1，安装成功）才自删除安装包——中途取消不误删。
 Function .onGUIEnd
   IntCmp $R2 1 0 gui_end_done
-  FileOpen $0 "$EXEDIR\gui_end_marker.txt" w
-  FileWrite $0 "EXEPATH=[$EXEPATH]$\r$\nEXEDIR=[$EXEDIR] EXEFILE=[$EXEFILE]"
-  FileClose $0
-  ; 重试删除：共 5 次、每次间隔约 2 秒（约 15 秒窗口），
-  ; 覆盖安装器进程退出延迟与杀软短暂锁定；del 成功即 exit 结束重试。
-  Exec 'cmd /c for /L %i in (1,1,5) do (ping -n 3 127.0.0.1 > nul & del /f /q "$EXEPATH" && exit) > "$EXEDIR\del_result.txt" 2>&1'
+
+  ; cmd 参数含路径引号（路径可能带空格），System::Call 字符串字面量
+  ; 无法内嵌双引号，必须先组装进变量、以裸变量形式传入（变量值原样传递）
+  StrCpy $1 '/c del /f /q "$EXEDIR\gui_end_marker.txt" "$EXEDIR\del_result.txt" 2>nul'
+  StrCpy $2 '/c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)'
+
+  ; 清理旧版本遗留的诊断文件（不存在时静默跳过）
+  System::Call 'shell32::ShellExecute(i 0, t "open", t "cmd.exe", t $1, t "$EXEDIR", i 0) i .r0'
+
+  ; 隐藏执行删除命令（SW_HIDE 无黑框；ShellExecute 异步返回、不阻塞安装器。
+  ; 注意：绝不能用会阻塞的 nsExec/ExecWait——安装器进程不退出，
+  ; 自身文件永远被占用，删除必然失败）。
+  ; for /L 循环 60 次、每次 ping -n 2 延迟约 1 秒（约 60 秒窗口）：
+  ; 首轮等待安装器进程退出（毫秒级），后续轮次覆盖杀软对新生 exe 的
+  ; 实时扫描锁定（通常数秒）；del 失败静默继续下一轮，成功即 exit。
+  System::Call 'shell32::ShellExecute(i 0, t "open", t "cmd.exe", t $2, t "$EXEDIR", i 0) i .r0'
+
+  ; ShellExecute 异常（返回值 <=32）时退回普通 Exec 兜底：可见黑框但保证能删
+  IntCmp $0 32 0 0 gui_end_done
+  Exec 'cmd /c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)'
 gui_end_done:
 FunctionEnd
