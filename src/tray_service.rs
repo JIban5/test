@@ -216,8 +216,10 @@ pub fn run_delself_once_and_collect_log() -> String {
 
     dlog!("manual trigger from UI");
 
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let record: Option<String> = hkcu
+    // 记录在 HKLM（64 位视图）：安装器以管理员提权运行，提权账户可能
+    // 与登录账户不同，HKCU 会分裂；HKLM 全账户共享且写入用 SetRegView 64
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let record: Option<String> = hklm
         .open_subkey(SUBKEY)
         .ok()
         .and_then(|k| k.get_value::<String, _>(VALUE_NAME).ok());
@@ -236,7 +238,7 @@ pub fn run_delself_once_and_collect_log() -> String {
                 Err(e) => dlog!(format!("manual delete: busy ({})", e)),
             }
             if res.is_ok() {
-                if let Ok(key) = hkcu.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
+                if let Ok(key) = hklm.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
                     let _ = key.delete_value(VALUE_NAME);
                 }
                 dlog!("record cleared after manual delete");
@@ -289,9 +291,11 @@ pub fn delete_pending_installer_async() {
         const SUBKEY: &str = r"Software\888";
         const VALUE_NAME: &str = "DeleteInstallerPath";
 
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        // 记录在 HKLM（64 位视图）：提权账户与登录账户可能不同（HKCU 分裂），
+        // HKLM 全账户共享；写入由安装器以 SetRegView 64 完成
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         // 读记录：键或值不存在 → 非安装升级场景，直接跳过
-        let installer_path: String = match hkcu.open_subkey(SUBKEY) {
+        let installer_path: String = match hklm.open_subkey(SUBKEY) {
             Ok(key) => match key.get_value::<String, _>(VALUE_NAME) {
                 Ok(path) => {
                     dbg(&format!("registry read OK: {}", path), &pkg_dir);
@@ -347,7 +351,9 @@ pub fn delete_pending_installer_async() {
         // 确认"已删除/本就不存在"才清记录；长期被占用则保留记录，
         // 下次启动再试，保证最终一定删除
         if done {
-            let cleared = match hkcu.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
+            // 清记录需要 KEY_WRITE：普通用户对 HKLM\Software\888 无写权限
+            // （键由安装器 admin 创建）——失败无妨，记录留着下次安装覆盖
+            let cleared = match hklm.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
                 Ok(key) => key.delete_value(VALUE_NAME).is_ok(),
                 Err(_) => false,
             };
