@@ -91,7 +91,7 @@ jobs:
         path: |
           target/release/888.exe
           target/release/sciter.dll
-          888.exe
+          888-setup.exe
 
   build-macos:
     if: false  # 已禁用 macOS 构建以加速
