@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.19"
+!define PRODUCT_VERSION "1.4.9.20"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.19.0"
+VIProductVersion "1.4.9.20.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.19"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.19"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.20"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.20"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -270,18 +270,20 @@ after_upgrade_stop:
 
   ; 记录安装包路径：--tray 进程启动后读取并在后台删除安装包
   ; （应用侧兜底，与 .onGUIEnd 的 cmd 删除互为双保险，文件不存在则跳过）。
-  ; 必须写 HKLM：安装器以管理员提权运行，若 UAC 输入的是其他管理员账户，
-  ; HKCU 指向那个账户，登录账户的进程永远读不到（实测踩坑）；
-  ; HKLM 全账户共享，写（admin）读（任意用户）必然一致。
-  ; 必须 SetRegView 64：32 位安装器写 HKLM\Software 默认重定向到
-  ; WOW6432Node，而 64 位应用读的是 64 位视图，不切视图必然错位。
+  ; 三处同写，兼容任意读取方：
+  ; - HKLM 64 位视图：64 位应用的标准读取位置
+  ; - HKLM 32 位视图（WOW6432Node）：32 位安装器未切视图时的位置
+  ; - HKCU：提权账户与登录账户一致时可用（跨账户时读不到，无害）
   SetRegView 64
   WriteRegStr HKLM "Software\${PRODUCT_NAME}" "DeleteInstallerPath" "$EXEPATH"
+  SetRegView 32
+  WriteRegStr HKLM "Software\${PRODUCT_NAME}" "DeleteInstallerPath" "$EXEPATH"
   SetRegView lastused
+  WriteRegStr HKCU "Software\${PRODUCT_NAME}" "DeleteInstallerPath" "$EXEPATH"
 
   ; 调试日志：安装侧执行轨迹（验证自删除用）
   !insertmacro APPLOG "[installer] v${PRODUCT_VERSION} exe=$EXEPATH"
-  !insertmacro APPLOG "[installer] DeleteInstallerPath written to HKLM\Software\888"
+  !insertmacro APPLOG "[installer] DeleteInstallerPath written (HKLM64/HKLM32/HKCU)"
 SectionEnd
 
 Section "Uninstall"
@@ -322,9 +324,10 @@ Section "Uninstall"
 
   ; 删除注册表
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
-  ; 删除安装包自删除记录键（应用侧兜底删除用；HKLM 64 位视图为现行
-  ; 位置，需同样切视图；HKCU 兼容清理 1.4.9.18 及更早版本的残留）
+  ; 删除安装包自删除记录键（三个写入位置全清理）
   SetRegView 64
+  DeleteRegKey HKLM "Software\${PRODUCT_NAME}"
+  SetRegView 32
   DeleteRegKey HKLM "Software\${PRODUCT_NAME}"
   SetRegView lastused
   DeleteRegKey HKCU "Software\${PRODUCT_NAME}"

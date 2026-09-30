@@ -192,16 +192,61 @@ fn append_selflog(dir: Option<&std::path::Path>, msg: &str) {
     }
 }
 
+/// 安装包路径记录的可能位置（兼容各历史版本写入的位置）：
+/// - Hklm64：HKLM\Software\888（1.4.9.19+，安装器 SetRegView 64）
+/// - HklmWow：HKLM\Software\WOW6432Node\888（32 位安装器未切视图时的落点）
+/// - Hkcu：HKCU\Software\888（1.4.9.15~1.4.9.18，提权同账户场景）
+#[derive(Clone, Copy, PartialEq)]
+enum RecordHive {
+    Hklm64,
+    HklmWow,
+    Hkcu,
+}
+
+const RECORD_VALUE: &str = "DeleteInstallerPath";
+
+fn open_record_key(hive: RecordHive, write: bool) -> Option<winreg::RegKey> {
+    use winreg::enums::*;
+    let subkey = match hive {
+        RecordHive::HklmWow => r"Software\WOW6432Node\888",
+        _ => r"Software\888",
+    };
+    let predef = match hive {
+        RecordHive::Hkcu => winreg::RegKey::predef(HKEY_CURRENT_USER),
+        _ => winreg::RegKey::predef(HKEY_LOCAL_MACHINE),
+    };
+    if write {
+        predef.open_subkey_with_flags(subkey, KEY_WRITE).ok()
+    } else {
+        predef.open_subkey(subkey).ok()
+    }
+}
+
+/// 依次尝试所有可能位置读取记录，命中即返回（位置, 安装包路径）
+fn read_installer_record() -> Option<(RecordHive, String)> {
+    let order = [RecordHive::Hklm64, RecordHive::HklmWow, RecordHive::Hkcu];
+    for hive in order {
+        if let Some(key) = open_record_key(hive, false) {
+            if let Ok(path) = key.get_value::<String, _>(RECORD_VALUE) {
+                return Some((hive, path));
+            }
+        }
+    }
+    None
+}
+
+/// 尝试清除指定位置的记录；普通用户对 HKLM 无写权限时静默失败
+/// （记录留着，下次安装覆盖，不影响删除本身）
+fn clear_installer_record(hive: RecordHive) -> bool {
+    open_record_key(hive, true)
+        .and_then(|k| k.delete_value(RECORD_VALUE).ok())
+        .is_some()
+}
+
 /// 主界面"诊断日志"按钮：立即尝试一次安装包删除，并返回完整日志文本。
 /// 与 --tray 启动时的后台兜底共用 %APPDATA%\888\delself.log；
 /// 读到记录时同步写安装包同目录（提权账户差异下用户也能看到）。
 pub fn run_delself_once_and_collect_log() -> String {
-    use winreg::enums::*;
-    use winreg::RegKey;
-
-    const SUBKEY: &str = r"Software\888";
-    const VALUE_NAME: &str = "DeleteInstallerPath";
-
     let appdata_dir = std::env::var_os("APPDATA")
         .map(|p| std::path::PathBuf::from(p).join("888"));
     let mut pkg_dir: Option<std::path::PathBuf> = None;
@@ -214,18 +259,14 @@ pub fn run_delself_once_and_collect_log() -> String {
         }};
     }
 
-    dlog!("manual trigger from UI");
+    dlog!(format!(
+        "manual trigger from UI (client v{} build {})",
+        crate::VERSION,
+        crate::BUILD_DATE
+    ));
 
-    // 记录在 HKLM（64 位视图）：安装器以管理员提权运行，提权账户可能
-    // 与登录账户不同，HKCU 会分裂；HKLM 全账户共享且写入用 SetRegView 64
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let record: Option<String> = hklm
-        .open_subkey(SUBKEY)
-        .ok()
-        .and_then(|k| k.get_value::<String, _>(VALUE_NAME).ok());
-
-    match record {
-        Some(path) => {
+    match read_installer_record() {
+        Some((hive, path)) => {
             pkg_dir = std::path::Path::new(&path)
                 .parent()
                 .map(|p| p.to_path_buf());
@@ -238,22 +279,26 @@ pub fn run_delself_once_and_collect_log() -> String {
                 Err(e) => dlog!(format!("manual delete: busy ({})", e)),
             }
             if res.is_ok() {
-                if let Ok(key) = hklm.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
-                    let _ = key.delete_value(VALUE_NAME);
-                }
-                dlog!("record cleared after manual delete");
+                let cleared = clear_installer_record(hive);
+                dlog!(format!("record cleared after manual delete: {}", cleared));
             }
         }
         None => {
-            dlog!("no registry record -> nothing to delete");
+            dlog!("no registry record in any known location -> nothing to delete");
         }
     }
 
-    match &appdata_dir {
+    let log_body = match &appdata_dir {
         Some(d) => std::fs::read_to_string(d.join("delself.log"))
             .unwrap_or_else(|_| "（暂无日志内容）".to_string()),
         None => "（无法定位日志目录）".to_string(),
-    }
+    };
+    format!(
+        "客户端版本: v{} (build {})\n若此版本不是最新，请重新下载最新安装包后再测。\n\n{}",
+        crate::VERSION,
+        crate::BUILD_DATE,
+        log_body
+    )
 }
 
 /// 安装包自删除兜底（应用侧，时机确定性远高于安装器侧的 cmd 延迟删除）：
@@ -281,34 +326,26 @@ pub fn delete_pending_installer_async() {
 
         dbg(
             &format!(
-                "task started, exe={:?}, pid={}",
+                "task started, exe={:?}, pid={}, client v{} build {}",
                 std::env::current_exe(),
-                std::process::id()
+                std::process::id(),
+                crate::VERSION,
+                crate::BUILD_DATE
             ),
             &pkg_dir,
         );
 
-        const SUBKEY: &str = r"Software\888";
-        const VALUE_NAME: &str = "DeleteInstallerPath";
-
-        // 记录在 HKLM（64 位视图）：提权账户与登录账户可能不同（HKCU 分裂），
-        // HKLM 全账户共享；写入由安装器以 SetRegView 64 完成
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        // 读记录：键或值不存在 → 非安装升级场景，直接跳过
-        let installer_path: String = match hklm.open_subkey(SUBKEY) {
-            Ok(key) => match key.get_value::<String, _>(VALUE_NAME) {
-                Ok(path) => {
-                    dbg(&format!("registry read OK: {}", path), &pkg_dir);
-                    path
-                }
-                Err(e) => {
-                    dbg(&format!("registry value read FAILED: {} -> skip", e), &pkg_dir);
-                    log::info!("未读取到安装包路径记录，跳过自删除");
-                    return;
-                }
-            },
-            Err(e) => {
-                dbg(&format!("registry key open FAILED: {} -> skip", e), &pkg_dir);
+        // 依次尝试所有可能位置读取记录（兼容 1.4.9.15+ 各历史版本写入位置）
+        let (hive, installer_path) = match read_installer_record() {
+            Some((hive, path)) => {
+                dbg(&format!("registry read OK: {}", path), &pkg_dir);
+                (hive, path)
+            }
+            None => {
+                dbg(
+                    "no registry record in any known location -> skip",
+                    &pkg_dir,
+                );
                 log::info!("未读取到安装包路径记录，跳过自删除");
                 return;
             }
@@ -351,12 +388,9 @@ pub fn delete_pending_installer_async() {
         // 确认"已删除/本就不存在"才清记录；长期被占用则保留记录，
         // 下次启动再试，保证最终一定删除
         if done {
-            // 清记录需要 KEY_WRITE：普通用户对 HKLM\Software\888 无写权限
-            // （键由安装器 admin 创建）——失败无妨，记录留着下次安装覆盖
-            let cleared = match hklm.open_subkey_with_flags(SUBKEY, KEY_WRITE) {
-                Ok(key) => key.delete_value(VALUE_NAME).is_ok(),
-                Err(_) => false,
-            };
+            // 清记录需要 KEY_WRITE：普通用户对 HKLM 无写权限时静默失败，
+            // 记录留着下次安装覆盖，不影响删除本身
+            let cleared = clear_installer_record(hive);
             dbg(&format!("done, record cleared: {}", cleared), &pkg_dir);
         } else {
             dbg("all attempts busy, record kept for next start", &pkg_dir);
