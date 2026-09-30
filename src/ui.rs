@@ -292,11 +292,11 @@ impl UI {
         }
     }
 
-    // 主界面"诊断日志"按钮：立即尝试一次安装包删除并返回完整日志文本
+    // 主界面"删除安装包"按钮：立即尝试一次安装包删除并返回结果描述
     fn run_delself_and_get_log(&mut self) -> String {
         #[cfg(windows)]
         {
-            crate::tray_service::run_delself_once_and_collect_log()
+            crate::tray_service::run_delself_once()
         }
         #[cfg(not(windows))]
         {

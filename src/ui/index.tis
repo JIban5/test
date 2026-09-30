@@ -727,7 +727,7 @@ class UninstallMe: Reactor.Component {
     function render() {
         return <div style="flow:horizontal; margin: * 0 0 0;">
             <button .button #uninstall-me .outline style="font-size:0.8em; height:1.8em;">{translate('Uninstall Software')}</button>
-            <button .button #delself-log .outline style="font-size:0.8em; height:1.8em; margin-left: 8px;">诊断日志</button>
+            <button .button #delself-log .outline style="font-size:0.8em; height:1.8em; margin-left: 8px;">删除安装包</button>
         </div>;
     }
 
@@ -738,16 +738,15 @@ class UninstallMe: Reactor.Component {
         });
     }
 
-    // 诊断日志：立即触发一次安装包删除尝试并弹窗显示完整日志
-    // （安装包自删除问题排查用；按钮本身可工作即证明客户端为新代码）
+    // 删除安装包：立即触发一次安装包删除尝试并弹窗显示结果
     event click $(#delself-log) {
-        var content = handler.run_delself_and_get_log();
-        if (!content || content.length == 0) content = "（暂无日志）";
+        var result = handler.run_delself_and_get_log();
+        if (!result || result.length == 0) result = "（无结果）";
         // msgbox 的 content 按 HTML 渲染，转义后用 pre 保留换行
-        content = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        msgbox("custom", "自删除诊断日志",
-            "<pre style=\"white-space:pre-wrap; word-break:break-all; font-size:11px; font-family: monospace; line-height:1.5;\">" + content + "</pre>",
-            "", function(res) {}, 620, 720);
+        result = result.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        msgbox("custom", "删除安装包",
+            "<pre style=\"white-space:pre-wrap; word-break:break-all; font-size:12px; line-height:1.5;\">" + result + "</pre>",
+            "", function(res) {}, 260, 640);
     }
 }
 
