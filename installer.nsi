@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.21"
+!define PRODUCT_VERSION "1.4.9.22"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.21.0"
+VIProductVersion "1.4.9.22.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.21"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.21"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.22"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.22"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -382,13 +382,15 @@ Function .onGUIEnd
   ; for /L 循环 60 次、每次 ping -n 2 延迟约 1 秒（约 60 秒窗口）：
   ; 首轮等待安装器进程退出（毫秒级），后续轮次覆盖杀软对新生 exe 的
   ; 实时扫描锁定（通常数秒）；del 失败静默继续下一轮，成功即 exit。
-  ExecShell "open" "cmd.exe" '/c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)' SW_HIDE
+  ; cmd 的启动/每次失败/删除成功均追加写 $EXEDIR\delself.log（调试用，
+  ; 验证通过后移除）——此前 2>nul 吞掉了 cmd 内部错误，无法定位。
+  ExecShell "open" "cmd.exe" '/c echo [cmd] delete loop start >> "$EXEDIR\delself.log" & for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>>"$EXEDIR\delself.log" && echo [cmd] DELETED >> "$EXEDIR\delself.log" && exit)' SW_HIDE
   IfErrors shell_failed shell_ok
 
 shell_failed:
   !insertmacro APPLOG "[installer] ExecShell(del-installer) FAILED -> Exec fallback"
   ; ExecShell 异常时退回普通 Exec 兜底：可见黑框但保证能删
-  Exec 'cmd /c for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>nul && exit)'
+  Exec 'cmd /c echo [cmd] delete loop start (fallback) >> "$EXEDIR\delself.log" & for /L %i in (1,1,60) do (ping -n 2 127.0.0.1 > nul & del /f /q "$EXEPATH" 2>>"$EXEDIR\delself.log" && echo [cmd] DELETED >> "$EXEDIR\delself.log" && exit)'
   Goto gui_end_done
 
 shell_ok:

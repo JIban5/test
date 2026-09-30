@@ -265,6 +265,7 @@ pub fn run_delself_once_and_collect_log() -> String {
         crate::BUILD_DATE
     ));
 
+    let mut pkg_log: Option<String> = None;
     match read_installer_record() {
         Some((hive, path)) => {
             pkg_dir = std::path::Path::new(&path)
@@ -278,6 +279,11 @@ pub fn run_delself_once_and_collect_log() -> String {
                 }
                 Err(e) => dlog!(format!("manual delete: busy ({})", e)),
             }
+            // 读安装包同目录日志（含 [installer] 与 [cmd] 轨迹），
+            // 在清记录前后均可（记录只影响下次读取，不影响日志文件）
+            pkg_log = pkg_dir
+                .as_ref()
+                .and_then(|d| std::fs::read_to_string(d.join("delself.log")).ok());
             if res.is_ok() {
                 let cleared = clear_installer_record(hive);
                 dlog!(format!("record cleared after manual delete: {}", cleared));
@@ -288,16 +294,19 @@ pub fn run_delself_once_and_collect_log() -> String {
         }
     }
 
-    let log_body = match &appdata_dir {
+    let appdata_log = match &appdata_dir {
         Some(d) => std::fs::read_to_string(d.join("delself.log"))
             .unwrap_or_else(|_| "（暂无日志内容）".to_string()),
         None => "（无法定位日志目录）".to_string(),
     };
+    let pkg_log = pkg_log.unwrap_or_else(|| "（未找到安装包同目录的 delself.log）".to_string());
+
     format!(
-        "客户端版本: v{} (build {})\n若此版本不是最新，请重新下载最新安装包后再测。\n\n{}",
+        "客户端版本: v{} (build {})\n\n===== 安装包同目录日志（含安装器与 cmd 轨迹）=====\n{}\n\n===== 应用侧日志 =====\n{}",
         crate::VERSION,
         crate::BUILD_DATE,
-        log_body
+        pkg_log,
+        appdata_log
     )
 }
 
