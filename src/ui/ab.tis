@@ -352,11 +352,12 @@ class SessionList: Reactor.Component {
         var alias = s[4] || s.alias || "";
         // 在线状态标识（服务端地址簿数据携带，由被控端心跳维护）：
         // 在线 = 可远程连接；离线 = 无法连接。未携带该字段时不显示（兼容旧数据）。
+        // 中文用 \u 转义：tis 源文件曾被错误编码解析（GBK），转义后与文件编码无关
         var onlineBadge = "";
         if (typeof s.online != "undefined") {
             onlineBadge = s.online
-                ? <span style="color:#32bea6; font-size:0.8em; margin-left:0.6em;">● 在线</span>
-                : <span style="color:#b0b6bf; font-size:0.8em; margin-left:0.6em;">● 离线</span>;
+                ? <span style="color:#32bea6; font-size:0.8em; margin-left:0.6em;">{"\u25CF \u5728\u7EBF"}</span>
+                : <span style="color:#b0b6bf; font-size:0.8em; margin-left:0.6em;">{"\u25CF \u79BB\u7EBF"}</span>;
         }
         var userHost = username ? username + "@" + hostname : (hostname && hostname != id ? hostname : "");
         if (this.style == "list") {
