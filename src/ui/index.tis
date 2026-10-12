@@ -757,16 +757,16 @@ class StudentNo: Reactor.Component {
         var saved = handler.get_local_option("student-no") || "";
         return <div style="flow:horizontal; vertical-align:middle; margin: 8px 0 0 0;">
             <span style="font-size:0.8em; color: #999;">学员编号:</span>
-            <input #student-no type=text style="width: 140px; height:1.8em; font-size:0.8em; margin-left: 6px;" value={saved} placeholder="文字或数字" spellcheck="none" />
+            <input #student-no type="text" style="width: 140px; height:1.8em; font-size:0.8em; margin-left: 6px;" value={saved} placeholder="文字或数字" />
             <button .button #save-student-no .outline style="font-size:0.8em; height:1.8em; margin-left: 6px;">保存</button>
         </div>;
     }
 
     event click $(#save-student-no) {
         var v = ($(#student-no).value || "").trim();
-        if (v.length > 32) v = v.slice(0, 32);  // 防超长输入
+        if (v.length > 32) v = v.slice(0, 32);
         handler.set_local_option("student-no", v);
-        handler.trigger_heartbeat();  // 立即上报，不等下一轮心跳
+        handler.trigger_heartbeat();
         msgbox("custom", "学员编号",
             v ? "已保存并上报：" + v : "已保存（未填写编号）",
             "", function(res) {}, 200, 480);
