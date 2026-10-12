@@ -4,7 +4,7 @@
 // 到期设备心跳响应 authorized=false → 停止被控服务（stop-service=Y），
 // RendezvousMediator 检测到该选项后停止向服务器注册并断开现有连接，
 // 设备将无法被远程连接；管理员改回永久/延长后自动恢复。
-use hbb_common::config::Config;
+use hbb_common::config::{Config, LocalConfig};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -46,12 +46,12 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
     let url = format!("{}/api/devices/register", api.trim_end_matches('/'));
     // 只上报 device_id + 学员编号（用户在客户端自行输入），
     // 不覆盖管理后台/同步脚本设置的设备名称。
-    // 学员编号双读：全局 option 与本地 option 两套存储都试
-    // （写入方为主界面进程双写，跨进程可见性以哪套为准不确定）
+    // 学员编号双读：全局 option 与本地配置（LocalConfig）两套存储都试
+    // （写入方为主界面进程双写：set_option + LocalConfig::set_option）
     let student_no = {
         let global = Config::get_option("student-no");
         if global.is_empty() {
-            Config::get_local_option("student-no")
+            LocalConfig::get_option("student-no")
         } else {
             global
         }
