@@ -44,11 +44,21 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
         return Ok(());
     }
     let url = format!("{}/api/devices/register", api.trim_end_matches('/'));
-    // 只上报 device_id + 学员编号（用户在客户端自行输入，存本地配置），
-    // 不覆盖管理后台/同步脚本设置的设备名称
+    // 只上报 device_id + 学员编号（用户在客户端自行输入），
+    // 不覆盖管理后台/同步脚本设置的设备名称。
+    // 学员编号双读：全局 option 与本地 option 两套存储都试
+    // （写入方为主界面进程双写，跨进程可见性以哪套为准不确定）
+    let student_no = {
+        let global = Config::get_option("student-no");
+        if global.is_empty() {
+            Config::get_local_option("student-no")
+        } else {
+            global
+        }
+    };
     let body = serde_json::json!({
         "device_id": Config::get_id(),
-        "student_no": Config::get_option("student-no"),
+        "student_no": student_no,
     });
     let client = crate::hbbs_http::create_http_client_with_url(&url);
     let resp = client

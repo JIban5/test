@@ -751,20 +751,23 @@ class UninstallMe: Reactor.Component {
 }
 
 // 学员编号（定制版）：终端用户自行输入（文字/数字均可），
-// 存本地配置并随心跳上报，后台设备管理与主控地址簿显示"ID + 学员编号"
+// 双写全局+本地配置（两套存储跨进程可见性不同），心跳双读上报，
+// 后台设备管理与主控地址簿显示"ID + 学员编号"
 class StudentNo: Reactor.Component {
     function render() {
-        var saved = handler.get_local_option("student-no") || "";
+        var saved = handler.get_option("student-no") || handler.get_local_option("student-no") || "";
         return <div style="flow:horizontal; vertical-align:middle; margin: 8px 0 0 0;">
             <span style="font-size:0.8em; color: #999;">学员编号:</span>
             <input #student-no type="text" style="width: 140px; height:1.8em; font-size:0.8em; margin-left: 6px;" value={saved} placeholder="文字或数字" />
-            <button .button #save-student-no .outline style="font-size:0.8em; height:1.8em; margin-left: 6px;">保存</button>
+            <button .button #save-student-no style="font-size:0.8em; height:1.8em; margin-left: 6px;">保存</button>
         </div>;
     }
 
     event click $(#save-student-no) {
         var v = ($(#student-no).value || "").trim();
         if (v.length > 32) v = v.slice(0, 32);
+        // 双写：全局 option 与本地 option（不同进程对两套存储的可见性不同）
+        handler.set_option("student-no", v);
         handler.set_local_option("student-no", v);
         handler.trigger_heartbeat();
         msgbox("custom", "学员编号",
