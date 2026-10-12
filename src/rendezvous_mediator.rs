@@ -51,6 +51,10 @@ lazy_static::lazy_static! {
 static SHOULD_EXIT: AtomicBool = AtomicBool::new(false);
 static MANUAL_RESTARTED: AtomicBool = AtomicBool::new(false);
 static SENT_REGISTER_PK: AtomicBool = AtomicBool::new(false);
+// 收到 hbbs 的 RegisterPeerResponse = 与 hbbs 的链路双向通 = 该设备当前
+// 可被远程；连接断开/重连/服务停止时置 false。心跳读取后上报给管理后台，
+// 用于判定"是否可正常远程"（心跳在线但未注册 hbbs 的设备不可被连接）。
+pub static REGISTER_PEER_OK: AtomicBool = AtomicBool::new(false);
 pub(crate) static NEEDS_DEPLOY: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "android")]
 static NOTIFIED_NEEDS_DEPLOY: AtomicBool = AtomicBool::new(false);
@@ -128,6 +132,8 @@ impl RendezvousMediator {
         check_zombie();
         let server = new_server();
         if config::option2bool("stop-service", &Config::get_option("stop-service")) {
+            // 服务被停用：mediator 不运行，标记不可被远程
+            REGISTER_PEER_OK.store(false, Ordering::SeqCst);
             crate::test_rendezvous_server();
         }
         let server_cloned = server.clone();
@@ -156,6 +162,8 @@ impl RendezvousMediator {
                 let servers = Config::get_rendezvous_servers();
                 SHOULD_EXIT.store(false, Ordering::SeqCst);
                 MANUAL_RESTARTED.store(false, Ordering::SeqCst);
+                // 新一轮连接生命周期开始：未收到注册响应前标记不可被远程
+                REGISTER_PEER_OK.store(false, Ordering::SeqCst);
                 for host in servers.clone() {
                     let server = server.clone();
                     let timeout = timeout.clone();
@@ -337,6 +345,8 @@ impl RendezvousMediator {
         match msg {
             Some(rendezvous_message::Union::RegisterPeerResponse(rpr)) => {
                 update_latency();
+                // 收到 hbbs 的注册响应 = 与 hbbs 的链路双向通 = 当前可被远程
+                REGISTER_PEER_OK.store(true, Ordering::SeqCst);
                 if rpr.request_pk {
                     log::info!("request_pk received from {}", self.host);
                     self.register_pk(sink).await?;

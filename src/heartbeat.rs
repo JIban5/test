@@ -59,6 +59,10 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
     let body = serde_json::json!({
         "device_id": Config::get_id(),
         "student_no": student_no,
+        // 是否注册到 hbbs（RendezvousMediator 收到注册响应）：
+        // 管理后台据此判定"可正常远程"——心跳在线但未注册 hbbs 的设备不可被连接
+        "registered": crate::rendezvous_mediator::REGISTER_PEER_OK
+            .load(std::sync::atomic::Ordering::SeqCst),
     });
     let client = crate::hbbs_http::create_http_client_with_url(&url);
     let resp = client
