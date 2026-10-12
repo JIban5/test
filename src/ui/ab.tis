@@ -359,6 +359,12 @@ class SessionList: Reactor.Component {
                 ? <span style="color:#32bea6; font-size:0.8em; margin-left:0.6em;">{"\u25CF \u5728\u7EBF"}</span>
                 : <span style="color:#b0b6bf; font-size:0.8em; margin-left:0.6em;">{"\u25CF \u79BB\u7EBF"}</span>;
         }
+        // 学员编号（服务端地址簿数据携带，终端用户在客户端自行输入，随心跳上报）：
+        // 显示在 ID 后、在线状态前；未填写时不显示
+        var studentBadge = "";
+        if (s.student_no) {
+            studentBadge = <span style="color:#e8a33d; font-size:0.8em; margin-left:0.6em;"># {s.student_no}</span>;
+        }
         var userHost = username ? username + "@" + hostname : (hostname && hostname != id ? hostname : "");
         if (this.style == "list") {
             return <div .remote-session-link .remote-session-list id={id} platform={platform} title={alias ? "ID: " + id : ""}>
@@ -369,6 +375,7 @@ class SessionList: Reactor.Component {
                     <div>
                         <div style="flow:horizontal;">
                             <div #alias .ellipsis>{alias ? alias : formatId(id)}</div>
+                            {studentBadge}
                             {onlineBadge}
                         </div>
                         {userHost ? <div .username .ellipsis>{userHost}</div> : ""}
@@ -387,6 +394,7 @@ class SessionList: Reactor.Component {
             <div .text>
                 <div style="flow:horizontal;">
                     <div #alias .ellipsis>{alias ? alias : formatId(id)}</div>
+                    {studentBadge}
                     {onlineBadge}
                 </div>
                 {svg_menu}

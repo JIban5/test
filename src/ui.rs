@@ -304,6 +304,12 @@ impl UI {
         }
     }
 
+    // 保存学员编号后调用：触发一次立即心跳上报（不等 60 秒轮询），
+    // 管理后台与主控地址簿马上可见
+    fn trigger_heartbeat(&mut self) {
+        crate::heartbeat::trigger_now();
+    }
+
     fn install_me(&mut self, _options: String, _path: String) {
         install_me(_options, _path, false, false);
     }
@@ -842,6 +848,7 @@ impl sciter::EventHandler for UI {
         fn goto_install();
         fn uninstall_me();
         fn run_delself_and_get_log();
+        fn trigger_heartbeat();
         fn is_process_trusted(bool);
         fn is_can_screen_recording(bool);
         fn is_installed_daemon(bool);

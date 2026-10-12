@@ -750,6 +750,29 @@ class UninstallMe: Reactor.Component {
     }
 }
 
+// 学员编号（定制版）：终端用户自行输入（文字/数字均可），
+// 存本地配置并随心跳上报，后台设备管理与主控地址簿显示"ID + 学员编号"
+class StudentNo: Reactor.Component {
+    function render() {
+        var saved = handler.get_local_option("student-no") || "";
+        return <div style="flow:horizontal; vertical-align:middle; margin: 8px 0 0 0;">
+            <span style="font-size:0.8em; color: #999;">学员编号:</span>
+            <input #student-no type=text style="width: 140px; height:1.8em; font-size:0.8em; margin-left: 6px;" value={saved} placeholder="文字或数字" spellcheck="none" />
+            <button .button #save-student-no .outline style="font-size:0.8em; height:1.8em; margin-left: 6px;">保存</button>
+        </div>;
+    }
+
+    event click $(#save-student-no) {
+        var v = ($(#student-no).value || "").trim();
+        if (v.length > 32) v = v.slice(0, 32);  // 防超长输入
+        handler.set_local_option("student-no", v);
+        handler.trigger_heartbeat();  // 立即上报，不等下一轮心跳
+        msgbox("custom", "学员编号",
+            v ? "已保存并上报：" + v : "已保存（未填写编号）",
+            "", function(res) {}, 200, 480);
+    }
+}
+
 class App: Reactor.Component
 {
     function this() {
@@ -777,6 +800,7 @@ class App: Reactor.Component
                         </div>}
                         {!outgoing_only && false && <PasswordArea />}
                         {!outgoing_only && <UninstallMe />}
+                        {!outgoing_only && <StudentNo />}
                     </div>
                     {software_update_url && !disable_installation ? <UpdateMe /> : ""}
                     {false && is_win && handler.is_installed() && !software_update_url && handler.is_installed_lower_version() && !disable_installation ? <UpgradeMe /> : ""}

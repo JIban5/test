@@ -5,10 +5,14 @@
 // RendezvousMediator 检测到该选项后停止向服务器注册并断开现有连接，
 // 设备将无法被远程连接；管理员改回永久/延长后自动恢复。
 use hbb_common::config::Config;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
 const HEARTBEAT_INTERVAL_SECS: u64 = 60;
+
+// 保存学员编号等场景需要立即上报（不等下一轮 60 秒心跳）
+static TRIGGER_NOW: AtomicBool = AtomicBool::new(false);
 
 pub fn start() {
     thread::spawn(|| loop {
@@ -16,8 +20,19 @@ pub fn start() {
             // 生产构建不落盘日志，仅调试模式可见
             hbb_common::log::info!("Heartbeat: {}", e);
         }
-        thread::sleep(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
+        // 正常等 60 秒；期间被 trigger_now() 置位则立即进入下一轮上报
+        for _ in 0..HEARTBEAT_INTERVAL_SECS {
+            if TRIGGER_NOW.swap(false, Ordering::SeqCst) {
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
     });
+}
+
+/// 主界面保存学员编号后调用：立即触发一次上报，后台马上可见
+pub fn trigger_now() {
+    TRIGGER_NOW.store(true, Ordering::SeqCst);
 }
 
 fn send_heartbeat() -> hbb_common::ResultType<()> {
@@ -29,8 +44,12 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
         return Ok(());
     }
     let url = format!("{}/api/devices/register", api.trim_end_matches('/'));
-    // 只上报 device_id，不覆盖管理后台/同步脚本设置的设备名称
-    let body = serde_json::json!({ "device_id": Config::get_id() });
+    // 只上报 device_id + 学员编号（用户在客户端自行输入，存本地配置），
+    // 不覆盖管理后台/同步脚本设置的设备名称
+    let body = serde_json::json!({
+        "device_id": Config::get_id(),
+        "student_no": Config::get_option("student-no"),
+    });
     let client = crate::hbbs_http::create_http_client_with_url(&url);
     let resp = client
         .post(&url)
