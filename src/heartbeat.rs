@@ -9,6 +9,38 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+/// 学员编号导入（下载页定制流程）：下载页按编号命名安装包
+/// （888-<编号>-setup.exe），安装器安装时把编号写入注册表；
+/// 客户端启动时导入到配置（全局+本地双写）并删除注册表值——
+/// 一次性导入：此后用户在客户端内的手动修改不会被安装覆盖。
+#[cfg(windows)]
+pub fn import_student_no_from_registry() {
+    use winreg::enums::*;
+    use winreg::RegKey;
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let Ok(key) = hklm.open_subkey(r"Software\888") else {
+        return;
+    };
+    let Ok(no) = key.get_value::<String, _>("StudentNo") else {
+        return;
+    };
+    let no = no.trim().to_string();
+    if no.is_empty() {
+        return;
+    }
+    // 双写全局+本地配置（与心跳读取配对），并立即触发一次上报
+    Config::set_option("student-no".into(), no.clone());
+    Config::set_local_option("student-no".into(), no.clone());
+    log::info!("已从安装包导入学员编号: {}", no);
+    if let Ok(wkey) = hklm.open_subkey_with_flags(r"Software\888", KEY_WRITE) {
+        let _ = wkey.delete_value("StudentNo");
+    }
+    thread::spawn(|| {
+        thread::sleep(Duration::from_secs(3));
+        let _ = send_heartbeat();
+    });
+}
+
 const HEARTBEAT_INTERVAL_SECS: u64 = 60;
 
 // 保存学员编号等场景需要立即上报（不等下一轮 60 秒心跳）

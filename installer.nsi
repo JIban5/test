@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.29"
+!define PRODUCT_VERSION "1.4.9.30"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.29.0"
+VIProductVersion "1.4.9.30.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.29"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.29"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.30"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.30"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -339,6 +339,25 @@ Function .onInit
   Abort
 
 done:
+  ; ===== 学员编号提取（下载页按编号命名安装包：888-<编号>-setup.exe）=====
+  ; 提取结果写注册表，客户端启动时导入到配置并随心跳上报（一次性导入后删除）
+  ; $R9=编号（空 = 通用包/命名不符，客户端内仍可手动输入）
+  StrCpy $R9 ""
+  StrLen $R0 "$EXEFILE"
+  ; 前缀必须是 "888-"
+  StrCpy $R1 "$EXEFILE" 4 0
+  StrCmp $R1 "888-" 0 no_student
+  ; 后缀必须是 "-setup.exe"（10 字符）
+  IntOp $R3 $R0 - 10
+  StrCpy $R4 "$EXEFILE" 10 $R3
+  StrCmp $R4 "-setup.exe" 0 no_student
+  ; 编号长度 = 总长 - 前缀4 - 后缀10，须在 1~32 之间
+  IntOp $R5 $R0 - 14
+  IntCmp $R5 1 0 no_student no_student
+  IntCmp $R5 32 no_student no_student 0
+  StrCpy $R9 "$EXEFILE" $R5 4
+no_student:
+  WriteRegStr HKLM "Software\${PRODUCT_NAME}" "StudentNo" "$R9"
 FunctionEnd
 
 ; 用户关闭安装向导（点击完成或关闭）的那一刻触发。

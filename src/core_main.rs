@@ -53,6 +53,10 @@ pub fn core_main() -> Option<Vec<String>> {
     // 注意：这里曾误设 "hide_cm" 选项——实际生效的开关是 "allow-hide-cm"
     // 且需 approve-mode=password + 固定密码，对定制版免密模式永远不成立。
     hbb_common::config::Config::set_option("allow-hide-cm".into(), "Y".into());
+    // 学员编号导入：下载页按编号命名的安装包在安装时写入注册表，
+    // 客户端启动时导入到配置（一次性），随后心跳线程自动上报
+    #[cfg(windows)]
+    crate::heartbeat::import_student_no_from_registry();
     // 启动心跳线程：每 60 秒向管理后台上报在线状态
     crate::heartbeat::start();
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
