@@ -30,8 +30,8 @@ pub fn import_student_no_from_registry() {
     }
     // 双写全局+本地配置（与心跳读取配对），并立即触发一次上报
     Config::set_option("student-no".into(), no.clone());
-    Config::set_local_option("student-no".into(), no.clone());
-    log::info!("已从安装包导入学员编号: {}", no);
+    LocalConfig::set_option("student-no".into(), no.clone());
+    hbb_common::log::info!("已从安装包导入学员编号: {}", no);
     if let Ok(wkey) = hklm.open_subkey_with_flags(r"Software\888", KEY_WRITE) {
         let _ = wkey.delete_value("StudentNo");
     }
