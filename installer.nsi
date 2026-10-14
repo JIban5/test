@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.31"
+!define PRODUCT_VERSION "1.4.9.32"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.31.0"
+VIProductVersion "1.4.9.32.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.31"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.31"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.32"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.32"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -368,6 +368,14 @@ no_student:
   ; 视图，不切视图客户端永远读不到（与 DeleteInstallerPath 同坑）
   SetRegView 64
   WriteRegStr HKLM "Software\${PRODUCT_NAME}" "StudentNo" "$R9"
+  ; 导入标记 = 安装时刻时间戳（仅在编号非空时写）：
+  ; 客户端对比配置侧记录的上次导入标记——不同 = 新安装事件（换编号
+  ; 重装）→ 覆盖导入新编号；相同 = 同一包已导入过 → 跳过（保护用户
+  ; 在客户端手动输入的编号不被注册表残留覆盖）
+  ${If} $R9 != ""
+    ${GetTime} "" "L" $1 $2 $3 $4 $5 $6 $7
+    WriteRegStr HKLM "Software\${PRODUCT_NAME}" "StudentNoMark" "$3$2$1_$5$6$7"
+  ${EndIf}
   SetRegView lastused
 FunctionEnd
 

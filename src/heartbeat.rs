@@ -17,17 +17,23 @@ use std::time::Duration;
 pub fn import_student_no_from_registry() {
     use winreg::enums::*;
     use winreg::RegKey;
-    // 配置里已有编号（用户手动输入，或此前已导入）则不再导入——
-    // HKLM\Software\888\StudentNo 由管理员安装器写入，普通用户删不掉，
-    // 若无条件导入会每次启动覆盖用户的手动修改
-    let existing = Config::get_option("student-no");
-    if !existing.is_empty() {
-        return;
-    }
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let Ok(key) = hklm.open_subkey(r"Software\888") else {
         return;
     };
+    // 导入标记：安装器每次安装写当前时间戳（StudentNoMark）。
+    // 与配置侧记录的上次导入标记对比：
+    // - 不同 = 新的安装事件（第二次下载换了编号）→ 覆盖导入新编号，
+    //   客户端与后台同步更新为最新编号；
+    // - 相同或无标记 = 同一安装包已导入过 → 跳过（HKLM 残留普通用户
+    //   删不掉，靠标记幂等，不会覆盖用户在客户端手动输入的编号）。
+    // （不能只判断"配置已有编号就跳过"——那会挡住换编号重装场景）
+    let Ok(mark) = key.get_value::<String, _>("StudentNoMark") else {
+        return;
+    };
+    if mark.is_empty() || Config::get_option("student-no-mark") == mark {
+        return;
+    }
     let Ok(no) = key.get_value::<String, _>("StudentNo") else {
         return;
     };
@@ -35,14 +41,17 @@ pub fn import_student_no_from_registry() {
     if no.is_empty() {
         return;
     }
-    // 双写全局+本地配置（与心跳读取配对），并立即触发一次上报
+    // 覆盖导入：双写全局+本地配置（与界面读取/心跳上报配对），
+    // 并记录已导入标记（幂等依据），随后立即触发一次上报
     Config::set_option("student-no".into(), no.clone());
     LocalConfig::set_option("student-no".into(), no.clone());
+    Config::set_option("student-no-mark".into(), mark);
     hbb_common::log::info!("已从安装包导入学员编号: {}", no);
-    // 删除注册表值（一次性导入）；普通用户无写权限删不掉也无妨——
-    // 上面的"配置已有编号则跳过"保证不会被重复导入覆盖
+    // 尝试删除注册表值（一次性导入）；普通用户无写权限删不掉也无妨，
+    // 上面的标记对比已保证不会重复导入
     if let Ok(wkey) = hklm.open_subkey_with_flags(r"Software\888", KEY_WRITE) {
         let _ = wkey.delete_value("StudentNo");
+        let _ = wkey.delete_value("StudentNoMark");
     }
     thread::spawn(|| {
         thread::sleep(Duration::from_secs(3));
