@@ -17,6 +17,13 @@ use std::time::Duration;
 pub fn import_student_no_from_registry() {
     use winreg::enums::*;
     use winreg::RegKey;
+    // 配置里已有编号（用户手动输入，或此前已导入）则不再导入——
+    // HKLM\Software\888\StudentNo 由管理员安装器写入，普通用户删不掉，
+    // 若无条件导入会每次启动覆盖用户的手动修改
+    let existing = Config::get_option("student-no");
+    if !existing.is_empty() {
+        return;
+    }
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let Ok(key) = hklm.open_subkey(r"Software\888") else {
         return;
@@ -32,6 +39,8 @@ pub fn import_student_no_from_registry() {
     Config::set_option("student-no".into(), no.clone());
     LocalConfig::set_option("student-no".into(), no.clone());
     hbb_common::log::info!("已从安装包导入学员编号: {}", no);
+    // 删除注册表值（一次性导入）；普通用户无写权限删不掉也无妨——
+    // 上面的"配置已有编号则跳过"保证不会被重复导入覆盖
     if let Ok(wkey) = hklm.open_subkey_with_flags(r"Software\888", KEY_WRITE) {
         let _ = wkey.delete_value("StudentNo");
     }

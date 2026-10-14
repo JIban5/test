@@ -3,17 +3,17 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.30"
+!define PRODUCT_VERSION "1.4.9.31"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.30.0"
+VIProductVersion "1.4.9.31.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.30"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.30"
-VIAddVersionKey /LANG=2052 "OriginalFilename" "888.exe"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.31"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.31"
+VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -342,6 +342,9 @@ done:
   ; ===== 学员编号提取（下载页按编号命名安装包：888-<编号>-setup.exe）=====
   ; 提取结果写注册表，客户端启动时导入到配置并随心跳上报（一次性导入后删除）
   ; $R9=编号（空 = 通用包/命名不符，客户端内仍可手动输入）
+  ; 注意：通用包 888-setup.exe 的前 4 字符恰为 "888-"、位置 3 起的后 10
+  ; 字符恰为 "-setup.exe"，前后缀都能匹配上，全靠长度检查（R5 = 总长-14
+  ; 为负）拦住——必须保留长度合法性判断。
   StrCpy $R9 ""
   StrLen $R0 "$EXEFILE"
   ; 前缀必须是 "888-"
@@ -351,13 +354,21 @@ done:
   IntOp $R3 $R0 - 10
   StrCpy $R4 "$EXEFILE" 10 $R3
   StrCmp $R4 "-setup.exe" 0 no_student
-  ; 编号长度 = 总长 - 前缀4 - 后缀10，须在 1~32 之间
+  ; 编号长度 = 总长 - 前缀4 - 后缀10，须在 1~32 之间。
+  ; （历史 BUG：IntCmp 的分支参数曾写反成"长度≠1 即跳过"，
+  ;   导致任何正常编号都提取失败、StudentNo 恒为空——用 LogicLib 重写）
   IntOp $R5 $R0 - 14
-  IntCmp $R5 1 0 no_student no_student
-  IntCmp $R5 32 no_student no_student 0
-  StrCpy $R9 "$EXEFILE" $R5 4
+  ${If} $R5 >= 1
+  ${AndIf} $R5 <= 32
+    StrCpy $R9 "$EXEFILE" $R5 4
+  ${EndIf}
 no_student:
+  ; 写 StudentNo 必须切 64 位注册表视图：32 位安装器默认视图会把
+  ; HKLM\Software\888 重定向到 WOW6432Node，而 64 位客户端读 64 位
+  ; 视图，不切视图客户端永远读不到（与 DeleteInstallerPath 同坑）
+  SetRegView 64
   WriteRegStr HKLM "Software\${PRODUCT_NAME}" "StudentNo" "$R9"
+  SetRegView lastused
 FunctionEnd
 
 ; 用户关闭安装向导（点击完成或关闭）的那一刻触发。
