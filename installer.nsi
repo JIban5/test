@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.34"
+!define PRODUCT_VERSION "1.4.9.35"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.34.0"
+VIProductVersion "1.4.9.35.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.34"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.34"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.35"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.35"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -30,6 +30,9 @@ VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 ; - 888.exe 同时是安装包自身的映像名：必须用 PID ne 排除安装器进程（否则自杀）
 ; - RuntimeBroker_888.exe / RuntimeBroker_rustdesk.exe：隐私模式 broker
 ;   副本（加载 sciter.dll），均为非系统进程，按映像名强杀安全
+; - rdassistant.exe / svchost.exe（远程助手目录）：历史版本程序名，
+;   旧进程存活会继续占用端口/自启，升级时必须一并结束（svchost 与系统
+;   同名，只在检测到旧版目录时才用 PowerShell 按路径精确过滤）
 !macro KILL888
   System::Call 'kernel32::GetCurrentProcessId() i .r9'
   nsExec::Exec 'taskkill /F /FI "IMAGENAME eq 888.exe" /FI "PID ne $9"'
@@ -38,6 +41,16 @@ VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
   Pop $0
   nsExec::Exec 'taskkill /F /FI "IMAGENAME eq RuntimeBroker_rustdesk.exe"'
   Pop $0
+  ; 历史程序名 rdassistant.exe（1.4.9.x 早期版本），非系统进程，按名强杀
+  nsExec::Exec 'taskkill /F /FI "IMAGENAME eq rdassistant.exe"'
+  Pop $0
+  ; svchost.exe 与系统进程同名，绝不能按映像名杀（会杀掉整个系统的
+  ; 数百个 svchost）；仅在检测到旧版目录时按完整路径精确过滤。
+  ; 用相对跳转而非标签——本宏在 Section 内被调用多次，标签会重复声明
+  IfFileExists "$R8\svchost.exe" 0 +3
+    nsExec::ExecToStack "powershell -NoProfile -Command \"Get-Process svchost -ErrorAction SilentlyContinue | Where-Object { $$_.Path -eq '$R8\svchost.exe' } | Stop-Process -Force\""
+    Pop $0
+    Pop $1
 !macroend
 
 Name "${PRODUCT_NAME}"
@@ -81,6 +94,10 @@ RequestExecutionLevel admin
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite on
+
+  ; 旧版（远程助手 svchost 时代）安装目录：KILL888 宏按完整路径精确
+  ; 结束旧版 svchost 进程时需要，必须在首次调用宏之前赋值
+  StrCpy $R8 "C:\Program Files\远程助手"
 
   ; ===== 覆盖升级：先卸载旧版本，再全新安装 =====
   IntCmp $R1 1 0 after_upgrade_stop
@@ -134,8 +151,10 @@ after_upgrade_stop:
 
   ; 汇合点再杀一轮（全新/升级共用；此刻离写入最近，覆盖前两轮之后
   ; 才被重新拉起的进程）。888.exe 映像名已排除安装器自身，安全。
+  ; 等待 1.5 秒：taskkill /F 返回后内核句柄释放仍有短暂延迟，
+  ; 过短会导致"进程已杀但文件仍被占用"
   !insertmacro KILL888
-  Sleep 500
+  Sleep 1500
 
   ; ===== 旧版本升级清理（远程助手/svchost.exe 时代 → 888/rdassistant.exe）=====
   ; 旧版目录、程序名、自启动项与新版本完全不同，安装时需彻底清理，
