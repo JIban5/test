@@ -57,8 +57,12 @@ pub fn core_main() -> Option<Vec<String>> {
     // 客户端启动时导入到配置（一次性），随后心跳线程自动上报
     #[cfg(windows)]
     crate::heartbeat::import_student_no_from_registry();
-    // 启动心跳线程：每 60 秒向管理后台上报在线状态
-    crate::heartbeat::start();
+    // 心跳线程不在此处启动——改为只在 --service（被控服务）进程启动，
+    // 见下方 --service 分支。原因：hbbs 判定"在线"取决于被控服务进程是否
+    // 向 hbbs 保活，若 --tray/主界面进程也发心跳，被控服务挂了面板仍显示
+    // 在线（假在线），实测出现"面板在线但远程报离线"。被控服务停止 → 心跳
+    // 停止 → 面板 3 分钟内转离线，与实际可远程状态一致；
+    // 且 REGISTER_PEER_OK 标志只在 --service 进程内真实有效，上报更准确。
     // 注意：不能再无条件设置 OPTION_HIDE_TRAY，否则普通启动（无参数）的主窗口
     // 也会被创建为隐藏（表现为"运行后不打开主界面"）。
     // 隐藏逻辑只应在 --tray 后台模式下生效，见下方 --tray 分支。
@@ -482,6 +486,9 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--service" {
             log::info!("start --service");
+            // 心跳只由被控服务进程上报：被控服务在跑 = 设备真正可被远程，
+            // 服务停了心跳就停，面板随之显示离线（不再出现假在线）
+            crate::heartbeat::start();
             crate::start_os_service();
             return None;
         } else if args[0] == "--server" {
