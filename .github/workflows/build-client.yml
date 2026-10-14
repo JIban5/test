@@ -87,7 +87,14 @@ jobs:
     - name: Build installer (NSIS)
       shell: cmd
       run: |
-        "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+        rem choco 的 nsis 包升级后安装路径不再固定，动态定位 makensis：
+        rem 旧 32 位路径 -> 新 64 位路径 -> PATH（chocolatey shim）
+        set "NSIS_EXE=C:\Program Files (x86)\NSIS\makensis.exe"
+        if not exist "%NSIS_EXE%" set "NSIS_EXE=C:\Program Files\NSIS\makensis.exe"
+        if not exist "%NSIS_EXE%" for /f "delims=" %%i in ('where makensis.exe 2^>nul') do set "NSIS_EXE=%%i"
+        if not exist "%NSIS_EXE%" (echo makensis not found after choco install & exit /b 1)
+        echo Using makensis: %NSIS_EXE%
+        "%NSIS_EXE%" installer.nsi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
