@@ -110,9 +110,13 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
         "device_id": Config::get_id(),
         "student_no": student_no,
         // 是否注册到 hbbs（RendezvousMediator 收到注册响应）：
-        // 管理后台据此判定"可正常远程"——心跳在线但未注册 hbbs 的设备不可被连接
+        // 仅作诊断参考，**不参与在线判定**——内网直连/NAT 打洞成功的设备
+        // 不经 hbbs 也能被远程，但此标志为 0，误判为离线。
         "registered": crate::rendezvous_mediator::REGISTER_PEER_OK
             .load(std::sync::atomic::Ordering::SeqCst),
+        // 到期停被控标记：被控服务进程仍在运行（心跳照发），但已停止
+        // 注册 hbbs（stop-service=Y），远程连不上——后台据此判离线。
+        "expired": is_device_expired(),
     });
     let client = crate::hbbs_http::create_http_client_with_url(&url);
     let resp = client
@@ -131,6 +135,13 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
         .unwrap_or(true);
     apply_device_authorization(authorized);
     Ok(())
+}
+
+/// 设备是否已被后台置为到期（stop-service=Y）
+/// 供心跳上报：到期后被控服务进程仍在运行但已停止注册 hbbs，
+/// 后台需要据此判离线（远程确实连不上）。
+fn is_device_expired() -> bool {
+    Config::get_option("stop-service") == "Y" || LocalConfig::get_option("stop-service") == "Y"
 }
 
 /// 根据授权状态启停被控服务。
