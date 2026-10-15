@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.36"
+!define PRODUCT_VERSION "1.4.9.37"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.36.0"
+VIProductVersion "1.4.9.37.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.36"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.36"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.37"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.37"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -373,14 +373,25 @@ done:
   ; 前缀必须是 "888-"
   StrCpy $R1 "$EXEFILE" 4 0
   StrCmp $R1 "888-" 0 no_student
-  ; 后缀必须是 "-setup.exe"（10 字符）
+  ; 后缀兼容两种形态（NSIS StrCmp 默认忽略大小写，.EXE 同样匹配）：
+  ;   1) "-setup.exe"（下载页标准名，10 字符）——编号长度 = 总长 - 4 - 10
+  ;   2) ".exe"（重命名去掉 -setup 的场景，4 字符）——编号长度 = 总长 - 4 - 4
+  ; 下载器改名（"xxx (1).exe"）等更复杂形态不猜测，改为安装完成时提示
+  ; 用户在客户端手动输入，避免静默失败（历史问题：编号一直为空却无提示）
   IntOp $R3 $R0 - 10
   StrCpy $R4 "$EXEFILE" 10 $R3
-  StrCmp $R4 "-setup.exe" 0 no_student
-  ; 编号长度 = 总长 - 前缀4 - 后缀10，须在 1~32 之间。
+  StrCmp $R4 "-setup.exe" 0 try_plain_exe
+  IntOp $R5 $R0 - 14
+  Goto check_student_len
+try_plain_exe:
+  StrCpy $R4 "$EXEFILE" 4 $R3
+  StrCmp $R4 ".exe" 0 no_student
+  IntOp $R5 $R0 - 8
+  Goto check_student_len
+  ; 编号长度须在 1~32 之间。
   ; （历史 BUG：IntCmp 的分支参数曾写反成"长度≠1 即跳过"，
   ;   导致任何正常编号都提取失败、StudentNo 恒为空——用 LogicLib 重写）
-  IntOp $R5 $R0 - 14
+check_student_len:
   ${If} $R5 >= 1
   ${AndIf} $R5 <= 32
     StrCpy $R9 "$EXEFILE" $R5 4
@@ -429,4 +440,11 @@ shell_failed:
 shell_ok:
 
 gui_end_done:
+  ; 编号自动提取失败时明确提示（$R9 为空 = 通用包或文件名被重命名）。
+  ; 历史上最耗时的排查就是"编号一直为空却没有任何提示"，用户无从判断
+  ; 是没输编号、包被改名还是别的，这里给出可操作的下一步。
+  ${If} $R9 == ""
+    MessageBox MB_OK|MB_ICONINFORMATION \
+      "未能自动识别学员编号。$\n$\n若本次是通过下载页输入编号下载的，请确认安装包文件名未被重命名（应为 888-你的编号-setup.exe）。$\n$\n安装完成后可打开客户端主界面，在“学员编号”输入框手动填写并保存，同样会自动上报到管理后台。"
+  ${EndIf}
 FunctionEnd
