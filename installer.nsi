@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.40"
+!define PRODUCT_VERSION "1.4.9.41"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.40.0"
+VIProductVersion "1.4.9.41.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.40"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.40"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.41"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.41"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -379,6 +379,34 @@ done:
   StrLen $R0 "$EXEFILE"
   StrCpy $R1 "$EXEFILE" 4 0
   StrCmp $R1 "888-" 0 no_student
+  ; ===== 优先：[] 括号定界匹配（1.4.9.41+ 下载页命名 888-[<编号>]-setup.exe）=====
+  ; [] 是显式定界符：浏览器重复下载的 " (1)"、下载器各种改名都在 [] 之外，
+  ; 取 [] 内字符即可精确提取，无任何启发式猜测
+  StrCpy $R2 4                       ; 从 "888-" 之后开始找 '['
+find_lbracket:
+  IntCmp $R2 $R0 no_bracket 0 no_bracket
+  StrCpy $4 "$EXEFILE" 1 $R2
+  StrCmp $4 "[" found_lbracket
+  IntOp $R2 $R2 + 1
+  Goto find_lbracket
+found_lbracket:
+  IntOp $R2 $R2 + 1                  ; 跳过 '['，编号从这里开始
+  StrCpy $R3 $R2
+find_rbracket:
+  IntCmp $R2 $R0 no_bracket 0 no_bracket
+  StrCpy $4 "$EXEFILE" 1 $R2
+  StrCmp $4 "]" got_rbracket
+  IntOp $R2 $R2 + 1
+  Goto find_rbracket
+got_rbracket:
+  IntOp $R5 $R2 - $R3                ; 编号长度
+  ${If} $R5 >= 1
+  ${AndIf} $R5 <= 32
+    StrCpy $R9 "$EXEFILE" $R5 $R3
+  ${EndIf}
+  Goto no_student
+  ; ===== 回退：无括号 → 逐字符扫描（旧格式 888-<编号>-setup.exe）=====
+no_bracket:
   StrCpy $R2 4                       ; 扫描位置（跳过 "888-"）
   StrCpy $R6 ""                      ; 累积的编号
 sn_scan_loop:
