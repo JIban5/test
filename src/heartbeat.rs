@@ -85,6 +85,55 @@ pub fn trigger_now() {
     TRIGGER_NOW.store(true, Ordering::SeqCst);
 }
 
+/// 读取当前学员编号（**跨进程安全**）。
+///
+/// 问题背景：学员编号在**用户会话进程**（主界面/托盘）里写入，而心跳在
+/// **被控服务进程**（SYSTEM）里发。RustDesk 的 Config 在进程内是静态缓存
+/// （CONFIG2 lazy_static），**进程启动后不会自动重载**——服务进程先启动、
+/// 用户随后在界面改编号时，服务进程内存里仍是旧值（通常为空），
+/// 心跳上报的 student_no 一直是空，后台永远看不到编号。
+/// （实测：安装时自动导入的编号能上报，界面手动改的不能。）
+///
+/// 方案：每次心跳**直接读共享配置文件**（RustDesk 已把 SYSTEM 的
+/// systemprofile 路径重定向到 ServiceProfiles\LocalService，服务与用户
+/// 会话共享同一份配置），内存值仅作读文件失败时的兜底。
+fn read_student_no() -> String {
+    if let Ok(s) = std::fs::read_to_string(Config::file()) {
+        for line in s.lines() {
+            let line = line.trim();
+            let Some(rest) = line.strip_prefix("student-no") else {
+                continue;
+            };
+            let Some(v) = rest.trim_start().strip_prefix('=') else {
+                continue;
+            };
+            let v = v.trim().trim_matches('"').trim_matches('\'').trim();
+            if !v.is_empty() {
+                return v.to_string();
+            }
+        }
+    }
+    // 兜底：进程内缓存（全局优先，空则本地）
+    let global = Config::get_option("student-no");
+    if global.is_empty() {
+        LocalConfig::get_option("student-no")
+    } else {
+        global
+    }
+}
+
+/// 主界面保存学员编号后调用：立即向后台上报一次。
+/// 不能只靠 TRIGGER_NOW 标志（进程内 static，界面进程设置后服务进程
+/// 心跳线程看不到），所以直接发一次上报请求，用户点保存后后台即时可见。
+pub fn report_now() {
+    thread::spawn(|| {
+        thread::sleep(Duration::from_millis(500));
+        if let Err(e) = send_heartbeat() {
+            hbb_common::log::info!("立即上报失败: {}", e);
+        }
+    });
+}
+
 fn send_heartbeat() -> hbb_common::ResultType<()> {
     let api = crate::common::get_api_server(
         Config::get_option("api-server"),
@@ -96,16 +145,7 @@ fn send_heartbeat() -> hbb_common::ResultType<()> {
     let url = format!("{}/api/devices/register", api.trim_end_matches('/'));
     // 只上报 device_id + 学员编号（用户在客户端自行输入），
     // 不覆盖管理后台/同步脚本设置的设备名称。
-    // 学员编号双读：全局 option 与本地配置（LocalConfig）两套存储都试
-    // （写入方为主界面进程双写：set_option + LocalConfig::set_option）
-    let student_no = {
-        let global = Config::get_option("student-no");
-        if global.is_empty() {
-            LocalConfig::get_option("student-no")
-        } else {
-            global
-        }
-    };
+    let student_no = read_student_no();
     let body = serde_json::json!({
         "device_id": Config::get_id(),
         "student_no": student_no,

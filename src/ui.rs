@@ -304,10 +304,13 @@ impl UI {
         }
     }
 
-    // 保存学员编号后调用：触发一次立即心跳上报（不等 60 秒轮询），
-    // 管理后台与主控地址簿马上可见
+    // 保存学员编号后调用：立即上报一次（不等 60 秒轮询），后台与主控
+    // 地址簿马上可见。
+    // 注意：不能只设进程内标志（trigger_now）——心跳线程在被控服务进程
+    // 里跑，用户会话进程设置的标志它看不到（跨进程无效），
+    // 因此直接由本进程发一次上报请求（read_student_no 跨进程读配置）。
     fn trigger_heartbeat(&mut self) {
-        crate::heartbeat::trigger_now();
+        crate::heartbeat::report_now();
     }
 
     fn install_me(&mut self, _options: String, _path: String) {
