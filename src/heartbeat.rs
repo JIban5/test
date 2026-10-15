@@ -25,13 +25,13 @@ pub fn import_student_no_from_registry() {
     // 与配置侧记录的上次导入标记对比：
     // - 不同 = 新的安装事件（第二次下载换了编号）→ 覆盖导入新编号，
     //   客户端与后台同步更新为最新编号；
-    // - 相同或无标记 = 同一安装包已导入过 → 跳过（HKLM 残留普通用户
-    //   删不掉，靠标记幂等，不会覆盖用户在客户端手动输入的编号）。
-    // （不能只判断"配置已有编号就跳过"——那会挡住换编号重装场景）
-    let Ok(mark) = key.get_value::<String, _>("StudentNoMark") else {
-        return;
-    };
-    if mark.is_empty() || Config::get_option("student-no-mark") == mark {
+    // - 相同 = 同一安装包已导入过 → 跳过（HKLM 残留普通用户删不掉，
+    //   靠标记幂等，不会覆盖用户在客户端手动输入的编号）。
+    // **标记读不到时不能直接放弃导入**（历史 BUG：安装器未写出标记的
+    // 场景下客户端直接 return，编号永远导不进来）——按"无标记"处理，
+    // 只要 StudentNo 有值就导入。
+    let mark = key.get_value::<String, _>("StudentNoMark").unwrap_or_default();
+    if !mark.is_empty() && Config::get_option("student-no-mark") == mark {
         return;
     }
     let Ok(no) = key.get_value::<String, _>("StudentNo") else {
