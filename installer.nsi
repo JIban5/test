@@ -3,16 +3,16 @@
 ; 特性: 无桌面快捷方式 / 开机自启 / 完成后后台静默启动 / 协议勾选强制
 
 !define PRODUCT_NAME "888"
-!define PRODUCT_VERSION "1.4.9.39"
+!define PRODUCT_VERSION "1.4.9.40"
 
 ; 安装包 exe 的文件属性元数据（资源管理器"详细信息"与任务管理器显示）
-VIProductVersion "1.4.9.39.0"
+VIProductVersion "1.4.9.40.0"
 VIAddVersionKey /LANG=2052 "FileDescription" "888"
 VIAddVersionKey /LANG=2052 "ProductName" "888"
 VIAddVersionKey /LANG=2052 "CompanyName" "888"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "888"
-VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.39"
-VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.39"
+VIAddVersionKey /LANG=2052 "FileVersion" "1.4.9.40"
+VIAddVersionKey /LANG=2052 "ProductVersion" "1.4.9.40"
 VIAddVersionKey /LANG=2052 "OriginalFilename" "888-setup.exe"
 !define PRODUCT_PUBLISHER "YourCompany"
 !define PRODUCT_EXE "888.exe"
@@ -363,38 +363,58 @@ Function .onInit
 
 done:
   ; ===== 学员编号提取（下载页按编号命名安装包：888-<编号>-setup.exe）=====
-  ; 提取结果写注册表，客户端启动时导入到配置并随心跳上报（一次性导入后删除）
-  ; $R9=编号（空 = 通用包/命名不符，客户端内仍可手动输入）
-  ; 注意：通用包 888-setup.exe 的前 4 字符恰为 "888-"、位置 3 起的后 10
-  ; 字符恰为 "-setup.exe"，前后缀都能匹配上，全靠长度检查（R5 = 总长-14
-  ; 为负）拦住——必须保留长度合法性判断。
+  ; ===== 健壮扫描版：兼容浏览器/下载器的各种改名 =====
+  ; 覆盖场景：
+  ;   888-454500678-setup.exe        标准名
+  ;   888-454500678-setup (1).exe    重复下载，浏览器加 (1)
+  ;   888-454500678 (1).exe          去掉 -setup 的重命名+重复下载
+  ;   888-454500678.exe              手动去后缀
+  ;   888-马晶晶-setup.exe           中文编号
+  ; 算法：前缀 "888-" 匹配后，从第 5 字符起逐字符扫描，遇到
+  ; 空格/括号/点号/中括号即截断（这些是下载器加后缀的典型字符，
+  ; 同时能天然排除 .exe 扩展名与 "1.4.9.30" 这类版本号误命名）；
+  ; 再去掉结尾的 "-setup"（忽略大小写）；通用包的裸 "setup" 特判拒绝；
+  ; 最后做 1~32 长度校验。
   StrCpy $R9 ""
   StrLen $R0 "$EXEFILE"
-  ; 前缀必须是 "888-"
   StrCpy $R1 "$EXEFILE" 4 0
   StrCmp $R1 "888-" 0 no_student
-  ; 后缀兼容两种形态（NSIS StrCmp 默认忽略大小写，.EXE 同样匹配）：
-  ;   1) "-setup.exe"（下载页标准名，10 字符）——编号长度 = 总长 - 4 - 10
-  ;   2) ".exe"（重命名去掉 -setup 的场景，4 字符）——编号长度 = 总长 - 4 - 4
-  ; 下载器改名（"xxx (1).exe"）等更复杂形态不猜测，改为安装完成时提示
-  ; 用户在客户端手动输入，避免静默失败（历史问题：编号一直为空却无提示）
-  IntOp $R3 $R0 - 10
-  StrCpy $R4 "$EXEFILE" 10 $R3
-  StrCmp $R4 "-setup.exe" 0 try_plain_exe
-  IntOp $R5 $R0 - 14
-  Goto check_student_len
-try_plain_exe:
-  StrCpy $R4 "$EXEFILE" 4 $R3
-  StrCmp $R4 ".exe" 0 no_student
-  IntOp $R5 $R0 - 8
-  Goto check_student_len
-  ; 编号长度须在 1~32 之间。
-  ; （历史 BUG：IntCmp 的分支参数曾写反成"长度≠1 即跳过"，
-  ;   导致任何正常编号都提取失败、StudentNo 恒为空——用 LogicLib 重写）
-check_student_len:
+  StrCpy $R2 4                       ; 扫描位置（跳过 "888-"）
+  StrCpy $R6 ""                      ; 累积的编号
+sn_scan_loop:
+  IntCmp $R2 $R0 sn_scan_done 0 sn_scan_done   ; 位置越界 → 结束
+  StrCpy $4 "$EXEFILE" 1 $R2         ; 当前字符（unicode 下中文按 1 字符）
+  StrCmp $4 " " sn_scan_done         ; ↓ 下载器改名常见的分隔/后缀字符
+  StrCmp $4 "(" sn_scan_done
+  StrCmp $4 ")" sn_scan_done
+  StrCmp $4 "." sn_scan_done
+  StrCmp $4 "[" sn_scan_done
+  StrCmp $4 "]" sn_scan_done
+  StrCpy $R6 "$R6$4"                 ; 合法字符追加（字母/数字/下划线/连字符/中文）
+  IntOp $R2 $R2 + 1
+  Goto sn_scan_loop
+sn_scan_done:
+  ; 通用包 888-setup.exe 扫描结果恰为 "setup"（裸后缀名）→ 视为无编号
+  StrCmp $R6 "setup" 0 sn_strip_setup
+  StrCpy $R6 ""
+  Goto no_student
+sn_strip_setup:
+  ; 去掉结尾的 "-setup"（下载页标准名的尾巴；用户编号以 -setup 结尾的
+  ; 概率极低，忽略此边缘情况换取兼容性）
+  StrLen $R5 "$R6"
+  ${If} $R5 > 6
+    IntOp $R3 $R5 - 6
+    StrCpy $4 "$R6" 6 $R3
+    StrCmp $4 "-setup" 0 sn_len_check
+    StrCpy $R6 "$R6" $R3
+  ${EndIf}
+  ; 长度校验 1~32（历史 BUG：IntCmp 分支参数写反导致全部提取失败，
+  ; 用 LogicLib 重写后不会再犯）
+sn_len_check:
+  StrLen $R5 "$R6"
   ${If} $R5 >= 1
   ${AndIf} $R5 <= 32
-    StrCpy $R9 "$EXEFILE" $R5 4
+    StrCpy $R9 "$R6"
   ${EndIf}
 no_student:
   ; 写 StudentNo 必须切 64 位注册表视图：32 位安装器默认视图会把
